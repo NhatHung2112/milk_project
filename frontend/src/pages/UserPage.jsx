@@ -146,7 +146,7 @@ const QRScanner = ({ onScan, onClose }) => {
           },
           (err) => {
             // Bỏ qua lỗi quét liên tục
-          }
+          },
         );
       }
     }, 100);
@@ -294,7 +294,7 @@ export default function UserPage({ onBack }) {
   const [checkUid, setCheckUid] = useState("");
 
   const hiddenList = JSON.parse(
-    localStorage.getItem("hidden_products") || "[]"
+    localStorage.getItem("hidden_products") || "[]",
   );
 
   useEffect(() => {
@@ -303,7 +303,8 @@ export default function UserPage({ onBack }) {
     });
   }, []);
 
-  const handleVerify = async (uid) => {
+  // Sửa hàm handleVerify để nhận thêm tham số 'sourceType'
+  const handleVerify = async (uid, sourceType = "view") => {
     const target = uid || checkUid;
     if (!target) return alert("Vui lòng nhập mã sản phẩm!");
     if (hiddenList.includes(target)) return alert("Sản phẩm này đang bị khóa!");
@@ -313,9 +314,14 @@ export default function UserPage({ onBack }) {
       if (data.is_valid) {
         setDetailData({ ...data, uid: target });
         setView("detail");
-        api.recordScan(target, "Web Client");
+
+        // [QUAN TRỌNG] Gửi loại hành động lên server
+        // sourceType sẽ là 'scan' hoặc 'view'
+        api.recordScan(target, "Web Client", "valid", sourceType);
       } else {
         alert("⚠️ Không tìm thấy sản phẩm! Vui lòng kiểm tra lại mã.");
+        // Ghi nhận lỗi cũng phân loại luôn
+        api.recordScan(target, "Web Client", "invalid", sourceType);
       }
     } catch (e) {
       alert("Lỗi kết nối Server!");
@@ -454,7 +460,7 @@ export default function UserPage({ onBack }) {
           <button
             className="btn btn-primary rounded-pill px-4 fw-bold"
             style={{ backgroundColor: "#00bfff", border: "none" }}
-            onClick={() => handleVerify()}
+            onClick={() => handleVerify(checkUid, "view")} // <-- Truyền "view"
           >
             KIỂM TRA
           </button>
@@ -483,7 +489,7 @@ export default function UserPage({ onBack }) {
               <ProductCard
                 key={product.uid}
                 product={product}
-                onClick={() => handleVerify(product.uid)}
+                onClick={() => handleVerify(product.uid, "view")} // <-- Truyền "view"
               />
             ))
           ) : (
@@ -498,7 +504,7 @@ export default function UserPage({ onBack }) {
         <QRScanner
           onScan={(uid) => {
             setShowScanner(false);
-            handleVerify(uid);
+            handleVerify(uid, "scan"); // <-- Truyền "scan" (QUAN TRỌNG)
           }}
           onClose={() => setShowScanner(false)}
         />

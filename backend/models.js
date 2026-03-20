@@ -38,7 +38,9 @@ const historySchema = new mongoose.Schema({
   uid: String,
   location: String,
   time: String,
-  status: { type: String, enum: ['valid', 'invalid'], default: 'valid' }, // [MỚI] Trạng thái
+  status: { type: String, enum: ["valid", "invalid"], default: "valid" },
+  // [MỚI] Thêm trường này để phân loại
+  action_type: { type: String, enum: ["scan", "view"], default: "view" },
   timestamp: { type: Date, default: Date.now },
 });
 
@@ -48,8 +50,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: String,
   password: { type: String, required: true }, // Trong thực tế nên mã hóa (bcrypt), ở đây làm demo lưu plain text
-  role: { type: String, default: 'user' }, // 'user' hoặc 'admin'
-  created_at: { type: Date, default: Date.now }
+  role: { type: String, default: "user" }, // 'user' hoặc 'admin'
+  created_at: { type: Date, default: Date.now },
 });
 
 module.exports = {

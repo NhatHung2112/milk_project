@@ -373,7 +373,7 @@ const HomePage = ({ onStart }) => {
             <div className="col-md-4 text-start">
               <h5 className="fw-bold text-white mb-3">Liên Hệ</h5>
               <p className="small opacity-75 mb-1">
-                📍 Địa chỉ: Học viện hàng không Việt Nam, TP. Hồ Chí Minh
+                📍 Địa chỉ: Học Viện Hàng Không Việt Nam, TP. Hồ Chí Minh
               </p>
               <p className="small opacity-75 mb-1">📞 Hotline: 1900 1234</p>
               <p className="small opacity-75">

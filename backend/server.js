@@ -50,7 +50,7 @@ app.post("/create_product", async (req, res) => {
       p.uid,
       p.name,
       p.batch_number,
-      p.expiry_date_unix
+      p.expiry_date_unix,
     );
 
     // B. Tạo mã QR (Dạng Base64 ảnh)
@@ -65,7 +65,7 @@ app.post("/create_product", async (req, res) => {
       category: p.category || "Sữa Tươi", // [MỚI] Lưu loại sản phẩm
       batch_number: p.batch_number,
       expiry_date: new Date(p.expiry_date_unix * 1000).toLocaleDateString(
-        "vi-VN"
+        "vi-VN",
       ),
       expiry_unix: p.expiry_date_unix,
       created_at: new Date().toLocaleDateString("vi-VN"),
@@ -109,7 +109,7 @@ app.post("/create_products_bulk", async (req, res) => {
           p.uid,
           p.name,
           p.batch_number,
-          p.expiry_date_unix
+          p.expiry_date_unix,
         );
 
         // Tạo QR
@@ -182,7 +182,7 @@ app.get("/verify/:uid", async (req, res) => {
         name: bcData.name,
         batch_number: bcData.batch_number,
         expiry_date: new Date(bcData.expiry_unix * 1000).toLocaleDateString(
-          "vi-VN"
+          "vi-VN",
         ),
         product_image: "https://via.placeholder.com/300?text=No+Image",
         description: "Dữ liệu được khôi phục từ Blockchain.",
@@ -200,22 +200,21 @@ app.get("/verify/:uid", async (req, res) => {
 // 4. Ghi nhận lượt quét (Thống kê)
 app.post("/record_scan", async (req, res) => {
   try {
-    const { uid, location, status } = req.body;
+    // [MỚI] Lấy thêm action_type từ req.body
+    const { uid, location, status, action_type } = req.body;
 
-    // Chỉ tăng đếm nếu hợp lệ
     if (status !== "invalid") {
       await Product.updateOne({ uid: uid }, { $inc: { scan_count: 1 } });
     }
-
-    // Lưu lịch sử chi tiết (cả đúng và sai)
     const now = new Date();
+
     await History.create({
       uid: uid,
       location: location || "Không xác định",
       time: now.toLocaleString("vi-VN"),
       status: status || "valid",
+      action_type: action_type || "view", // [MỚI] Lưu loại hành động
     });
-
     res.json({ status: "success" });
   } catch (e) {
     res.json({ status: "error" });
@@ -314,7 +313,7 @@ app.get("/clear_database", async (req, res) => {
 
     console.log("⚠️ Đã xóa sạch dữ liệu trong Database!");
     res.send(
-      "<h1>✅ Đã xóa sạch Database! Giờ bạn có thể Import lại từ đầu.</h1>"
+      "<h1>✅ Đã xóa sạch Database! Giờ bạn có thể Import lại từ đầu.</h1>",
     );
   } catch (e) {
     res.status(500).send("Lỗi: " + e.message);

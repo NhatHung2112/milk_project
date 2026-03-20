@@ -19,6 +19,8 @@ import {
   XCircle,
   Layers,
   FileText,
+  MessageSquare, // Giữ lại icon nếu bạn đã thêm từ trước, nếu chưa có thì có thể bỏ
+  MessageCircle,
 } from "lucide-react";
 import { api } from "../services/api";
 import {
@@ -42,6 +44,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [users, setUsers] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  // [MỚI] State cho Feedback (Giữ lại logic nếu bạn đã merge code trước, nếu chưa thì dòng này không ảnh hưởng)
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [replyModal, setReplyModal] = useState(null);
+  const [replyText, setReplyText] = useState("");
+
   // State tìm kiếm
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -49,7 +56,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [batchFilter, setBatchFilter] = useState("all");
 
   const [hiddenList, setHiddenList] = useState(
-    JSON.parse(localStorage.getItem("hidden_products") || "[]")
+    JSON.parse(localStorage.getItem("hidden_products") || "[]"),
   );
 
   // State nhập Excel
@@ -61,6 +68,8 @@ const AdminDashboard = ({ user, onLogout }) => {
     setProducts(data);
     const usersData = await api.getUsers();
     setUsers(usersData);
+    // Nếu bạn có API feedback thì uncomment dòng dưới
+    // const fb = await api.getFeedbacks(); setFeedbacks(fb);
   };
 
   useEffect(() => {
@@ -107,7 +116,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             expiry_date: clean(cols[4]),
             // Tính unix timestamp cho việc tính toán ngày còn lại
             expiry_date_unix: Math.floor(
-              new Date(clean(cols[4])).getTime() / 1000
+              new Date(clean(cols[4])).getTime() / 1000,
             ),
             product_image: clean(cols[5]) || "https://placehold.co/400",
             description: cols.slice(6).join(",").replace(/^"|"$/g, ""),
@@ -118,7 +127,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (formattedProducts.length > 0) {
         if (
           window.confirm(
-            `Tìm thấy ${formattedProducts.length} sản phẩm. Bạn có muốn nhập không?`
+            `Tìm thấy ${formattedProducts.length} sản phẩm. Bạn có muốn nhập không?`,
           )
         ) {
           const res = await api.createProductsBulk(formattedProducts);
@@ -139,37 +148,32 @@ const AdminDashboard = ({ user, onLogout }) => {
     e.target.value = "";
   };
 
-  // --- [ĐÃ SỬA] LOGIC TÍNH HẠN SỬ DỤNG (FIX LỖI NaN) ---
+  // --- LOGIC TÍNH HẠN SỬ DỤNG ---
   const getDaysRemaining = (p) => {
-    // 1. Ưu tiên dùng số giây (unix) nếu có -> Chính xác nhất
     if (p.expiry_unix) {
-      const expiry = p.expiry_unix * 1000; // Đổi sang mili giây
+      const expiry = p.expiry_unix * 1000;
       const now = Date.now();
       return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
     }
 
-    // 2. Nếu không có unix, thử tính từ chuỗi ngày (phòng hờ)
     if (!p.expiry_date) return 0;
 
     try {
-      // Xử lý định dạng dd/mm/yyyy (Việt Nam)
       if (p.expiry_date.includes("/")) {
         const parts = p.expiry_date.split("/");
         if (parts.length === 3) {
-          // new Date(năm, tháng - 1, ngày)
           const expiry = new Date(parts[2], parts[1] - 1, parts[0]).getTime();
           const now = Date.now();
           return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
         }
       }
-      // Các định dạng khác (yyyy-mm-dd)
       const expiry = new Date(p.expiry_date).getTime();
-      if (isNaN(expiry)) return 0; // Nếu vẫn lỗi thì trả về 0
+      if (isNaN(expiry)) return 0;
 
       const now = Date.now();
       return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
     } catch {
-      return 0; // Trả về 0 nếu lỗi format
+      return 0;
     }
   };
 
@@ -181,18 +185,14 @@ const AdminDashboard = ({ user, onLogout }) => {
     return { label: "An toàn", color: "success", bg: "success" };
   };
 
-  // Logic lọc sản phẩm theo từ khóa tìm kiếm (Tab Products)
   const filteredProducts = products.filter(
     (p) =>
       p.uid.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.name.toLowerCase().includes(searchTerm.toLowerCase())
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Logic lọc sản phẩm theo hạn sử dụng (Tab Batches)
   const getFilteredBatches = () => {
     let result = [...products];
-
-    // Lọc theo nút bấm
     if (batchFilter === "expired") {
       result = result.filter((p) => getDaysRemaining(p) < 0);
     } else if (batchFilter === "warning") {
@@ -203,8 +203,6 @@ const AdminDashboard = ({ user, onLogout }) => {
     } else if (batchFilter === "safe") {
       result = result.filter((p) => getDaysRemaining(p) > 30);
     }
-
-    // Sắp xếp ưu tiên hết hạn lên đầu
     return result.sort((a, b) => {
       const daysA = getDaysRemaining(a);
       const daysB = getDaysRemaining(b);
@@ -228,7 +226,6 @@ const AdminDashboard = ({ user, onLogout }) => {
     setShowHistory(true);
   };
 
-  // --- CHART DATA PREPARATION ---
   const topProducts = [...products]
     .sort((a, b) => (b.scan_count || 0) - (a.scan_count || 0))
     .slice(0, 5)
@@ -238,7 +235,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     }));
 
   const validCount = history.filter(
-    (h) => !h.status || h.status === "valid"
+    (h) => !h.status || h.status === "valid",
   ).length;
   const invalidCount = history.filter((h) => h.status === "invalid").length;
 
@@ -320,6 +317,9 @@ const AdminDashboard = ({ user, onLogout }) => {
               >
                 <Users size={20} className="me-2" /> Quản Lý Người Dùng
               </button>
+              {/* Nếu bạn đã thêm tab Feedback thì uncomment dòng dưới */}
+              {/* <button className={`btn text-start p-3 rounded-3 fw-bold ${activeTab === "feedback" ? "btn-primary text-white shadow" : "btn-light text-muted"}`} onClick={() => setActiveTab("feedback")}> <MessageSquare size={20} className="me-2" /> Ý Kiến Phản Hồi </button> */}
+
               <button
                 className="btn btn-light text-start p-3 rounded-3 fw-bold text-muted"
                 onClick={loadHistory}
@@ -525,7 +525,6 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </button>
                   </div>
 
-                  {/* Thanh Tìm Kiếm */}
                   <div className="input-group mb-3 shadow-sm">
                     <span className="input-group-text bg-white border-end-0 text-muted">
                       <Search size={18} />
@@ -660,7 +659,6 @@ const AdminDashboard = ({ user, onLogout }) => {
                 Hạn Sử Dụng
               </h4>
 
-              {/* THANH LỌC LÔ HÀNG */}
               <div className="d-flex flex-wrap gap-2 mb-4">
                 <button
                   className={`btn rounded-pill px-3 d-flex align-items-center gap-2 ${
@@ -737,8 +735,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                               days <= 30 && days >= 0
                                 ? "bg-warning bg-opacity-10"
                                 : days < 0
-                                ? "bg-danger bg-opacity-10"
-                                : ""
+                                  ? "bg-danger bg-opacity-10"
+                                  : ""
                             }
                           >
                             <td className="fw-bold font-monospace">
@@ -778,9 +776,51 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           )}
+
+          {/* Nếu bạn có tab Feedback, bạn có thể uncomment để hiển thị */}
+          {/* {activeTab === "feedback" && (
+            <div className="glass-panel p-4 rounded-4 animate-in">
+              <h4 className="fw-bold mb-4 text-primary">
+                <MessageCircle size={24} className="me-2" /> Ý Kiến Phản Hồi
+              </h4>
+              <div className="table-responsive">
+                <table className="table align-middle">
+                  <thead className="table-light">
+                    <tr><th className="ps-4">Người Gửi</th><th style={{ width: "40%" }}>Nội Dung</th><th>Trả Lời</th><th className="text-center">Trạng Thái</th></tr>
+                  </thead>
+                  <tbody>
+                    {feedbacks.map((fb) => (
+                      <tr key={fb._id} className={fb.status === "pending" ? "bg-light" : ""}>
+                        <td className="ps-4">
+                          <div className="fw-bold">{fb.fullname}</div>
+                          <small className="text-muted">@{fb.username}</small><br />
+                          <small className="text-muted">{new Date(fb.createdAt).toLocaleDateString("vi-VN")}</small>
+                        </td>
+                        <td>
+                          <div className="bg-white p-2 border rounded text-muted fst-italic mb-1">"{fb.content}"</div>
+                          {fb.reply && (<div className="text-primary small mt-1"><strong>Admin:</strong> {fb.reply}</div>)}
+                        </td>
+                        <td>
+                          {fb.status === "pending" ? (
+                            <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => setReplyModal(fb._id)}>Trả lời</button>
+                          ) : (<span className="text-success small fw-bold">Đã xong</span>)}
+                        </td>
+                        <td className="text-center">
+                          {fb.status === "pending" ? <span className="badge bg-warning text-dark">Chờ xử lý</span> : <span className="badge bg-success">Đã trả lời</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {feedbacks.length === 0 && <tr><td colSpan="4" className="text-center py-4 text-muted">Chưa có phản hồi nào.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )} 
+          */}
         </div>
       </div>
 
+      {/* --- MODAL LỊCH SỬ ĐÃ CHIA TAB (THAY ĐỔI Ở ĐÂY) --- */}
       {showHistory && (
         <div
           className="modal d-block"
@@ -793,7 +833,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             <div className="glass-panel modal-content border-0 rounded-4">
               <div className="modal-header border-0 pb-0">
                 <h5 className="modal-title fw-bold text-gradient">
-                  Lịch Sử Quét QR
+                  Lịch Sử Truy Xuất
                 </h5>
                 <button
                   className="btn-close"
@@ -801,27 +841,172 @@ const AdminDashboard = ({ user, onLogout }) => {
                 ></button>
               </div>
               <div className="modal-body">
-                <div className="table-responsive" style={{ maxHeight: "60vh" }}>
-                  <table className="table table-striped mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th className="ps-4">Thời Gian</th>
-                        <th>Mã SP</th>
-                        <th>Vị Trí</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map((h, i) => (
-                        <tr key={i}>
-                          <td className="ps-4 small">{h.time}</td>
-                          <td>
-                            <span className="badge bg-secondary">{h.uid}</span>
-                          </td>
-                          <td>{h.location}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {/* Tabs chuyển đổi */}
+                <ul
+                  className="nav nav-pills mb-3 justify-content-center"
+                  id="pills-tab"
+                  role="tablist"
+                >
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className="nav-link active rounded-pill fw-bold px-4"
+                      id="pills-scan-tab"
+                      data-bs-toggle="pill"
+                      data-bs-target="#pills-scan"
+                      type="button"
+                      role="tab"
+                      aria-controls="pills-scan"
+                      aria-selected="true"
+                    >
+                      📸 Quét QR (Camera)
+                    </button>
+                  </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className="nav-link rounded-pill fw-bold px-4 ms-2"
+                      id="pills-view-tab"
+                      data-bs-toggle="pill"
+                      data-bs-target="#pills-view"
+                      type="button"
+                      role="tab"
+                      aria-controls="pills-view"
+                      aria-selected="false"
+                    >
+                      🌐 Tra cứu Web
+                    </button>
+                  </li>
+                </ul>
+
+                <div className="tab-content" id="pills-tabContent">
+                  {/* Tab 1: Lịch sử Quét QR */}
+                  <div
+                    className="tab-pane fade show active"
+                    id="pills-scan"
+                    role="tabpanel"
+                  >
+                    <div
+                      className="table-responsive"
+                      style={{ maxHeight: "50vh" }}
+                    >
+                      <table className="table table-striped mb-0 align-middle">
+                        <thead className="table-light sticky-top">
+                          <tr>
+                            <th className="ps-4">Thời Gian</th>
+                            <th>Mã SP</th>
+                            <th>Vị Trí</th>
+                            <th>Trạng Thái</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history.filter((h) => h.action_type === "scan")
+                            .length > 0 ? (
+                            history
+                              .filter((h) => h.action_type === "scan")
+                              .map((h, i) => (
+                                <tr key={i}>
+                                  <td className="ps-4 small">{h.time}</td>
+                                  <td>
+                                    <span className="badge bg-primary">
+                                      {h.uid}
+                                    </span>
+                                  </td>
+                                  <td className="small text-muted">
+                                    {h.location}
+                                  </td>
+                                  <td>
+                                    {h.status === "valid" ? (
+                                      <span className="badge bg-success">
+                                        Hợp lệ
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-danger">
+                                        Cảnh báo
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan="4"
+                                className="text-center text-muted py-3"
+                              >
+                                Chưa có dữ liệu quét QR.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Tab 2: Lịch sử Web */}
+                  <div
+                    className="tab-pane fade"
+                    id="pills-view"
+                    role="tabpanel"
+                  >
+                    <div
+                      className="table-responsive"
+                      style={{ maxHeight: "50vh" }}
+                    >
+                      <table className="table table-striped mb-0 align-middle">
+                        <thead className="table-light sticky-top">
+                          <tr>
+                            <th className="ps-4">Thời Gian</th>
+                            <th>Mã SP</th>
+                            <th>Vị Trí</th>
+                            <th>Trạng Thái</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history.filter(
+                            (h) => h.action_type === "view" || !h.action_type,
+                          ).length > 0 ? (
+                            history
+                              .filter(
+                                (h) =>
+                                  h.action_type === "view" || !h.action_type,
+                              )
+                              .map((h, i) => (
+                                <tr key={i}>
+                                  <td className="ps-4 small">{h.time}</td>
+                                  <td>
+                                    <span className="badge bg-secondary">
+                                      {h.uid}
+                                    </span>
+                                  </td>
+                                  <td className="small text-muted">
+                                    {h.location}
+                                  </td>
+                                  <td>
+                                    {h.status === "valid" ? (
+                                      <span className="badge bg-success">
+                                        Hợp lệ
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-danger">
+                                        Không tìm thấy
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan="4"
+                                className="text-center text-muted py-3"
+                              >
+                                Chưa có dữ liệu tra cứu web.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

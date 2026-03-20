@@ -38,11 +38,12 @@ export const api = {
   },
 
   // Ghi lại lịch sử quét
-  recordScan: async (uid, location, status = "valid") => {
+  // [MỚI] Thêm tham số action_type (mặc định là 'view')
+  recordScan: async (uid, location, status = "valid", action_type = "view") => {
     await fetch(`${API_URL}/record_scan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, location, status }), // <--- Đã thêm status vào đây
+      body: JSON.stringify({ uid, location, status, action_type }),
     });
   },
   // Lấy lịch sử quét (Cho Admin)
