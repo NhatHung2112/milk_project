@@ -10,6 +10,8 @@ import {
   Search,
   X,
   History as HistoryIcon,
+  User as UserIcon,
+  AlertTriangle, // [MỚI] Thêm icon cảnh báo
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRScanner from "../components/QRScanner";
@@ -23,8 +25,12 @@ const UserDashboard = ({ onBack }) => {
   const [showScanner, setShowScanner] = useState(false);
   const [checkInput, setCheckInput] = useState("");
   const [historyList, setHistoryList] = useState([]);
+  const [profileData, setProfileData] = useState({
+    fullname: "",
+    email: "",
+    newPassword: "",
+  });
 
-  // State cho bộ lọc và phân trang
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [listSearchTerm, setListSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,7 +44,6 @@ const UserDashboard = ({ onBack }) => {
     "Sữa Hạt",
     "Sữa Chua",
   ];
-
   const hiddenList = JSON.parse(
     localStorage.getItem("hidden_products") || "[]",
   );
@@ -51,16 +56,13 @@ const UserDashboard = ({ onBack }) => {
       );
   }, []);
 
-  // Reset về trang 1 khi đổi danh mục hoặc tìm kiếm
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCategory, listSearchTerm]);
 
-  // [CẬP NHẬT] Thêm tham số scanMethod để phân biệt cách quét
   const verify = async (input, scanMethod = "Tra cứu Web") => {
     const target = input || checkInput;
     if (!target) return alert("Vui lòng nhập mã hoặc tên sản phẩm!");
-
     if (hiddenList.includes(target)) return alert("Sản phẩm bị ẩn!");
 
     const currentUser = JSON.parse(localStorage.getItem("user"));
@@ -71,11 +73,9 @@ const UserDashboard = ({ onBack }) => {
       if (data.is_valid) {
         setDetail({ ...data, uid: data.uid });
         setView("detail");
-        // [CẬP NHẬT] Truyền scanMethod (Quét Camera / Tra cứu Web) vào API
         api.recordScan(data.uid, scanMethod, "valid", "scan", username);
       } else {
         alert("Không tìm thấy sản phẩm nào khớp với thông tin này!");
-        // [CẬP NHẬT] Truyền scanMethod vào API
         api.recordScan(target, scanMethod, "invalid", "scan", username);
       }
     } catch (e) {
@@ -90,11 +90,8 @@ const UserDashboard = ({ onBack }) => {
         alert("Vui lòng đăng nhập để xem lịch sử quét!");
         return;
       }
-
       const currentUser = JSON.parse(userStr);
-
       const data = await api.getUserHistory(currentUser.username);
-
       if (Array.isArray(data)) {
         setHistoryList(data);
         setView("history");
@@ -102,8 +99,38 @@ const UserDashboard = ({ onBack }) => {
         alert("Dữ liệu lỗi! Vui lòng chắc chắn bạn đã khởi động lại Backend.");
       }
     } catch (error) {
-      console.error("Lỗi khi mở lịch sử:", error);
       alert("Không thể tải lịch sử. Vui lòng kiểm tra lại kết nối Backend!");
+    }
+  };
+
+  const openProfile = () => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) return alert("Vui lòng đăng nhập để xem thông tin cá nhân!");
+
+    const currentUser = JSON.parse(userStr);
+    setProfileData({
+      fullname: currentUser.fullname || "",
+      email: currentUser.email || "",
+      newPassword: "",
+    });
+    setView("profile");
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    const currentUser = JSON.parse(localStorage.getItem("user"));
+
+    const res = await api.updateProfile({
+      username: currentUser.username,
+      ...profileData,
+    });
+
+    if (res.status === "success") {
+      alert("✅ " + res.message);
+      localStorage.setItem("user", JSON.stringify(res.user));
+      window.location.reload();
+    } else {
+      alert("❌ Lỗi: " + res.message);
     }
   };
 
@@ -113,7 +140,6 @@ const UserDashboard = ({ onBack }) => {
     const matchSearch =
       p.name.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
       p.uid.toLowerCase().includes(listSearchTerm.toLowerCase());
-
     return matchCategory && matchSearch;
   });
 
@@ -170,6 +196,32 @@ const UserDashboard = ({ onBack }) => {
               <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-success bg-opacity-10 text-success fw-bold mb-3 border border-success border-opacity-25">
                 <CheckCircle size={18} /> SẢN PHẨM CHÍNH HÃNG
               </div>
+
+              {/* [MỚI] Hiển thị cảnh báo nếu quét quá nhiều lần */}
+              {detail.scan_count > 5 && (
+                <div
+                  className="alert alert-warning d-flex align-items-start mb-3 border-warning shadow-sm rounded-4"
+                  role="alert"
+                >
+                  <AlertTriangle
+                    className="me-3 text-warning flex-shrink-0 mt-1"
+                    size={24}
+                  />
+                  <div>
+                    <h6 className="fw-bold mb-1 text-dark">
+                      ⚠️ Cảnh báo an toàn!
+                    </h6>
+                    <small className="text-dark">
+                      Sản phẩm này đã được quét{" "}
+                      <strong>{detail.scan_count} lần</strong>. Lượt quét cao
+                      bất thường cho thấy mã QR này có thể đã bị làm giả (sao
+                      chép dán lên nhiều hộp khác nhau). Hãy kiểm tra kỹ tem
+                      niêm phong vật lý!
+                    </small>
+                  </div>
+                </div>
+              )}
+
               <h2 className="fw-bold text-dark mb-2 display-6">
                 {detail.name}
               </h2>
@@ -205,8 +257,8 @@ const UserDashboard = ({ onBack }) => {
 
               <div className="mb-4">
                 <h6 className="fw-bold text-dark mb-2 d-flex align-items-center">
-                  <Package size={18} className="me-2 text-primary" />
-                  Thông tin chi tiết:
+                  <Package size={18} className="me-2 text-primary" /> Thông tin
+                  chi tiết:
                 </h6>
                 <p className="text-muted lh-base">
                   {detail.description ||
@@ -233,7 +285,7 @@ const UserDashboard = ({ onBack }) => {
                     <strong className="d-block text-dark">
                       Transaction Hash:
                     </strong>
-                    {detail.tx_hash}
+                    {detail.tx_hash}{" "}
                     {detail.tx_hash === "N/A" && (
                       <span className="text-danger ms-2">(Chưa ghi Block)</span>
                     )}
@@ -254,6 +306,77 @@ const UserDashboard = ({ onBack }) => {
               <Chatbot productName={detail.name} />
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "profile") {
+    return (
+      <div className="container py-5 animate-in">
+        <button
+          className="btn btn-light rounded-pill border mb-4 fw-bold px-3 shadow-sm"
+          onClick={() => setView("list")}
+        >
+          <ArrowLeft size={18} className="me-2" /> Quay lại
+        </button>
+        <div
+          className="glass-panel p-4 p-md-5 mx-auto rounded-5 shadow-sm"
+          style={{ maxWidth: "600px" }}
+        >
+          <h3 className="fw-bold mb-4 d-flex align-items-center text-dark">
+            <UserIcon className="me-2 text-primary" size={28} /> Thông Tin Cá
+            Nhân
+          </h3>
+          <form onSubmit={handleUpdateProfile}>
+            <div className="mb-3">
+              <label className="form-label fw-bold text-muted">Họ và Tên</label>
+              <input
+                type="text"
+                className="form-control rounded-3 p-3 bg-light border-0"
+                value={profileData.fullname}
+                onChange={(e) =>
+                  setProfileData({ ...profileData, fullname: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label fw-bold text-muted">Email</label>
+              <input
+                type="email"
+                className="form-control rounded-3 p-3 bg-light border-0"
+                value={profileData.email}
+                onChange={(e) =>
+                  setProfileData({ ...profileData, email: e.target.value })
+                }
+                placeholder="Ví dụ: email@gmail.com"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="form-label fw-bold text-muted">
+                Đổi Mật Khẩu Mới
+              </label>
+              <input
+                type="password"
+                className="form-control rounded-3 p-3 bg-light border-0"
+                placeholder="Bỏ trống nếu không muốn thay đổi..."
+                value={profileData.newPassword}
+                onChange={(e) =>
+                  setProfileData({
+                    ...profileData,
+                    newPassword: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary-gradient w-100 rounded-pill py-3 fw-bold shadow-md fs-6"
+            >
+              LƯU THAY ĐỔI
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -292,13 +415,12 @@ const UserDashboard = ({ onBack }) => {
                     <small className="text-muted d-block">
                       ⏳ Thời gian: {item.time}
                     </small>
-                    {/* [MỚI] Hiển thị thêm phương thức quét trong lịch sử */}
                     <small className="text-muted d-block">
                       🔍 Phương thức:{" "}
                       <span className="fw-bold">{item.location}</span>
                     </small>
                     <small className="text-muted">
-                      ✅ Trạng thái:
+                      ✅ Trạng thái:{" "}
                       <span
                         className={`ms-1 fw-bold ${item.status === "valid" ? "text-success" : "text-danger"}`}
                       >
@@ -312,7 +434,6 @@ const UserDashboard = ({ onBack }) => {
                     className="btn btn-sm btn-outline-primary rounded-pill px-3"
                     onClick={() => {
                       setCheckInput(item.uid);
-                      // [CẬP NHẬT] Bấm xem lại từ lịch sử
                       verify(item.uid, "Xem lại từ lịch sử");
                     }}
                   >
@@ -345,17 +466,15 @@ const UserDashboard = ({ onBack }) => {
         <div className="d-flex gap-2 justify-content-center p-1">
           <input
             className="form-control rounded-pill border-0 ps-4 py-3 bg-light fs-5"
-            placeholder="Nhập mã định danh sản phẩm"
+            placeholder="Nhập mã sản phẩm"
             value={checkInput}
             onChange={(e) => setCheckInput(e.target.value)}
-            // [CẬP NHẬT] Ghi nhận đây là "Tra cứu Web" khi nhấn Enter
             onKeyDown={(e) =>
               e.key === "Enter" && verify(checkInput, "Tra cứu Web")
             }
           />
           <button
             className="btn btn-primary-gradient rounded-pill px-5 fw-bold"
-            // [CẬP NHẬT] Ghi nhận đây là "Tra cứu Web" khi bấm nút Check
             onClick={() => verify(checkInput, "Tra cứu Web")}
           >
             Check
@@ -374,6 +493,13 @@ const UserDashboard = ({ onBack }) => {
           >
             <HistoryIcon size={20} className="text-dark" />
           </button>
+          <button
+            className="btn btn-outline-primary rounded-pill px-4 bg-white"
+            onClick={openProfile}
+            title="Tài khoản"
+          >
+            <UserIcon size={20} className="text-dark" />
+          </button>
         </div>
       </div>
 
@@ -385,7 +511,6 @@ const UserDashboard = ({ onBack }) => {
               Danh sách sản phẩm hiện có
             </span>
           </div>
-
           <div className="d-flex flex-wrap gap-2 align-items-center">
             <div className="position-relative me-2">
               <input
@@ -409,15 +534,10 @@ const UserDashboard = ({ onBack }) => {
                 </button>
               )}
             </div>
-
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
-                className={`btn btn-sm rounded-pill px-3 fw-bold ${
-                  selectedCategory === cat
-                    ? "btn-primary"
-                    : "btn-light text-muted"
-                }`}
+                className={`btn btn-sm rounded-pill px-3 fw-bold ${selectedCategory === cat ? "btn-primary" : "btn-light text-muted"}`}
                 onClick={() => setSelectedCategory(cat)}
               >
                 {cat}
@@ -442,7 +562,6 @@ const UserDashboard = ({ onBack }) => {
                   <motion.div
                     whileHover={{ y: -10, transition: { duration: 0.2 } }}
                     className="glass-panel h-100 border-0 p-3 rounded-4 position-relative card-hover-effect"
-                    // [CẬP NHẬT] Ghi nhận đây là click từ danh sách
                     onClick={() => verify(p.uid, "Tra cứu từ Danh Sách")}
                     style={{ cursor: "pointer" }}
                   >
@@ -497,12 +616,10 @@ const UserDashboard = ({ onBack }) => {
             >
               <ChevronLeft size={20} />
             </button>
-
             <span className="fw-bold text-muted">
               Trang <span className="text-primary">{currentPage}</span> /{" "}
               {totalPages}
             </span>
-
             <button
               className="btn btn-white border shadow-sm rounded-circle p-2 d-flex align-items-center justify-content-center"
               style={{ width: "40px", height: "40px" }}
@@ -519,7 +636,6 @@ const UserDashboard = ({ onBack }) => {
         <QRScanner
           onScan={(uid) => {
             setShowScanner(false);
-            // [CẬP NHẬT] Chỗ quan trọng nhất: Nhận diện Quét Camera
             verify(uid, "Quét Camera");
           }}
           onClose={() => setShowScanner(false)}

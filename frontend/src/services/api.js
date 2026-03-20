@@ -1,13 +1,11 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"; // Tự động nhận diện URL Backend
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export const api = {
-  // Lấy danh sách sản phẩm
   getProducts: async () => {
     const res = await fetch(`${API_URL}/products`);
     return res.json();
   },
 
-  // Tạo sản phẩm mới
   createProduct: async (productData) => {
     const res = await fetch(`${API_URL}/create_product`, {
       method: "POST",
@@ -16,7 +14,7 @@ export const api = {
     });
     return res.json();
   },
-  // [THÊM MỚI] Hàm nhập hàng loạt
+
   createProductsBulk: async (products) => {
     try {
       const res = await fetch(`${API_URL}/create_products_bulk`, {
@@ -31,14 +29,11 @@ export const api = {
     }
   },
 
-  // Xác thực sản phẩm (Tra cứu)
   verifyProduct: async (uid) => {
     const res = await fetch(`${API_URL}/verify/${uid}`);
     return res.json();
   },
 
-  // Ghi lại lịch sử quét
-  // [MỚI] Thêm tham số action_type (mặc định là 'view') và username
   recordScan: async (
     uid,
     location,
@@ -52,19 +47,17 @@ export const api = {
       body: JSON.stringify({ uid, location, status, action_type, username }),
     });
   },
-  // Lấy lịch sử quét (Cho Admin)
+
   getHistory: async () => {
     const res = await fetch(`${API_URL}/scan_history`);
     return res.json();
   },
 
-  // [MỚI] Lấy lịch sử quét (Cho User cá nhân)
   getUserHistory: async (username) => {
     const res = await fetch(`${API_URL}/user_history/${username}`);
     return res.json();
   },
 
-  // Chat với AI
   askAI: async (productName, question) => {
     const res = await fetch(`${API_URL}/ask_ai`, {
       method: "POST",
@@ -74,7 +67,6 @@ export const api = {
     return res.json();
   },
 
-  // Đăng ký
   register: async (userData) => {
     const res = await fetch(`${API_URL}/register`, {
       method: "POST",
@@ -84,7 +76,6 @@ export const api = {
     return res.json();
   },
 
-  // Đăng nhập
   login: async (credentials) => {
     const res = await fetch(`${API_URL}/login`, {
       method: "POST",
@@ -94,7 +85,16 @@ export const api = {
     return res.json();
   },
 
-  // Lấy danh sách users (Admin)
+  // [MỚI] Hàm cập nhật thông tin
+  updateProfile: async (userData) => {
+    const res = await fetch(`${API_URL}/update_profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userData),
+    });
+    return res.json();
+  },
+
   getUsers: async () => {
     const res = await fetch(`${API_URL}/users`);
     return res.json();
