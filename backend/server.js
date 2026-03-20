@@ -146,7 +146,6 @@ app.post("/create_products_bulk", async (req, res) => {
   }
 });
 
-// 3. Xác thực sản phẩm (Dành cho User khi quét mã)
 // 3. Xác thực sản phẩm (Dành cho User khi quét mã hoặc nhập tên)
 app.get("/verify/:uid", async (req, res) => {
   try {
@@ -200,8 +199,8 @@ app.get("/verify/:uid", async (req, res) => {
 // 4. Ghi nhận lượt quét (Thống kê)
 app.post("/record_scan", async (req, res) => {
   try {
-    // [MỚI] Lấy thêm action_type từ req.body
-    const { uid, location, status, action_type } = req.body;
+    // [MỚI] Lấy thêm action_type và username từ req.body
+    const { uid, location, status, action_type, username } = req.body;
 
     if (status !== "invalid") {
       await Product.updateOne({ uid: uid }, { $inc: { scan_count: 1 } });
@@ -210,6 +209,7 @@ app.post("/record_scan", async (req, res) => {
 
     await History.create({
       uid: uid,
+      username: username || "Khách", // [MỚI] Lưu tên user quét mã
       location: location || "Không xác định",
       time: now.toLocaleString("vi-VN"),
       status: status || "valid",
@@ -225,6 +225,19 @@ app.post("/record_scan", async (req, res) => {
 app.get("/scan_history", async (req, res) => {
   try {
     const data = await History.find().sort({ timestamp: -1 }).limit(50);
+    res.json(data);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// [MỚI] 5b. Thêm API lấy lịch sử cá nhân cho User
+app.get("/user_history/:username", async (req, res) => {
+  try {
+    // Tìm lịch sử khớp với username, sắp xếp mới nhất lên đầu
+    const data = await History.find({ username: req.params.username }).sort({
+      timestamp: -1,
+    });
     res.json(data);
   } catch (e) {
     res.json([]);

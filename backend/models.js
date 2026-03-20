@@ -36,6 +36,7 @@ const productSchema = new mongoose.Schema({
 // 2. Schema Lịch Sử Quét (Lưu vết người dùng)
 const historySchema = new mongoose.Schema({
   uid: String,
+  username: String, // [MỚI] Thêm trường này để biết user nào quét
   location: String,
   time: String,
   status: { type: String, enum: ["valid", "invalid"], default: "valid" },

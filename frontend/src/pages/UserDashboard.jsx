@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Search,
   X,
+  History as HistoryIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRScanner from "../components/QRScanner";
@@ -20,11 +21,12 @@ const UserDashboard = ({ onBack }) => {
   const [products, setProducts] = useState([]);
   const [detail, setDetail] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
-  const [checkInput, setCheckInput] = useState(""); // Đổi tên từ checkUid thành checkInput cho đúng ý nghĩa
+  const [checkInput, setCheckInput] = useState("");
+  const [historyList, setHistoryList] = useState([]);
 
   // State cho bộ lọc và phân trang
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
-  const [listSearchTerm, setListSearchTerm] = useState(""); // [MỚI] Tìm kiếm trong danh sách
+  const [listSearchTerm, setListSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -38,14 +40,14 @@ const UserDashboard = ({ onBack }) => {
   ];
 
   const hiddenList = JSON.parse(
-    localStorage.getItem("hidden_products") || "[]"
+    localStorage.getItem("hidden_products") || "[]",
   );
 
   useEffect(() => {
     api
       .getProducts()
       .then((data) =>
-        setProducts(data.filter((p) => !hiddenList.includes(p.uid)))
+        setProducts(data.filter((p) => !hiddenList.includes(p.uid))),
       );
   }, []);
 
@@ -54,29 +56,57 @@ const UserDashboard = ({ onBack }) => {
     setCurrentPage(1);
   }, [selectedCategory, listSearchTerm]);
 
-  const verify = async (input) => {
+  // [CẬP NHẬT] Thêm tham số scanMethod để phân biệt cách quét
+  const verify = async (input, scanMethod = "Tra cứu Web") => {
     const target = input || checkInput;
     if (!target) return alert("Vui lòng nhập mã hoặc tên sản phẩm!");
 
-    // Nếu nhập mã ID thì check ẩn, nhập tên thì bỏ qua check này
     if (hiddenList.includes(target)) return alert("Sản phẩm bị ẩn!");
+
+    const currentUser = JSON.parse(localStorage.getItem("user"));
+    const username = currentUser ? currentUser.username : "Khách";
 
     try {
       const data = await api.verifyProduct(target);
       if (data.is_valid) {
-        setDetail({ ...data, uid: data.uid }); // Đảm bảo dùng UID trả về từ server
+        setDetail({ ...data, uid: data.uid });
         setView("detail");
-        api.recordScan(data.uid, "Web Client", "valid");
+        // [CẬP NHẬT] Truyền scanMethod (Quét Camera / Tra cứu Web) vào API
+        api.recordScan(data.uid, scanMethod, "valid", "scan", username);
       } else {
         alert("Không tìm thấy sản phẩm nào khớp với thông tin này!");
-        api.recordScan(target, "Web Client", "invalid");
+        // [CẬP NHẬT] Truyền scanMethod vào API
+        api.recordScan(target, scanMethod, "invalid", "scan", username);
       }
     } catch (e) {
       alert("Lỗi kết nối");
     }
   };
 
-  // [MỚI] Logic lọc sản phẩm: Theo Danh mục AND (Theo Tên OR Theo UID)
+  const viewHistory = async () => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        alert("Vui lòng đăng nhập để xem lịch sử quét!");
+        return;
+      }
+
+      const currentUser = JSON.parse(userStr);
+
+      const data = await api.getUserHistory(currentUser.username);
+
+      if (Array.isArray(data)) {
+        setHistoryList(data);
+        setView("history");
+      } else {
+        alert("Dữ liệu lỗi! Vui lòng chắc chắn bạn đã khởi động lại Backend.");
+      }
+    } catch (error) {
+      console.error("Lỗi khi mở lịch sử:", error);
+      alert("Không thể tải lịch sử. Vui lòng kiểm tra lại kết nối Backend!");
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
     const matchCategory =
       selectedCategory === "Tất cả" || p.category === selectedCategory;
@@ -87,12 +117,11 @@ const UserDashboard = ({ onBack }) => {
     return matchCategory && matchSearch;
   });
 
-  // Phân trang
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentProducts = filteredProducts.slice(
     indexOfFirstItem,
-    indexOfLastItem
+    indexOfLastItem,
   );
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
@@ -230,6 +259,74 @@ const UserDashboard = ({ onBack }) => {
     );
   }
 
+  if (view === "history") {
+    return (
+      <div className="container py-5 animate-in">
+        <button
+          className="btn btn-light rounded-pill border mb-4 fw-bold px-3 shadow-sm"
+          onClick={() => setView("list")}
+        >
+          <ArrowLeft size={18} className="me-2" /> Quay lại
+        </button>
+        <div
+          className="glass-panel p-4 mx-auto rounded-5 shadow-sm"
+          style={{ maxWidth: "800px" }}
+        >
+          <h3 className="fw-bold mb-4 d-flex align-items-center text-dark">
+            <HistoryIcon className="me-2 text-primary" size={28} /> Lịch sử tra
+            cứu của bạn
+          </h3>
+          {historyList.length === 0 ? (
+            <p className="text-muted text-center py-5">
+              Bạn chưa quét sản phẩm nào.
+            </p>
+          ) : (
+            <div className="list-group">
+              {historyList.map((item, index) => (
+                <div
+                  key={index}
+                  className="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-3 mb-3 rounded border shadow-sm"
+                >
+                  <div>
+                    <h5 className="mb-1 fw-bold text-primary">{item.uid}</h5>
+                    <small className="text-muted d-block">
+                      ⏳ Thời gian: {item.time}
+                    </small>
+                    {/* [MỚI] Hiển thị thêm phương thức quét trong lịch sử */}
+                    <small className="text-muted d-block">
+                      🔍 Phương thức:{" "}
+                      <span className="fw-bold">{item.location}</span>
+                    </small>
+                    <small className="text-muted">
+                      ✅ Trạng thái:
+                      <span
+                        className={`ms-1 fw-bold ${item.status === "valid" ? "text-success" : "text-danger"}`}
+                      >
+                        {item.status === "valid"
+                          ? "Hợp lệ (Chính hãng)"
+                          : "Không hợp lệ (Cảnh báo giả)"}
+                      </span>
+                    </small>
+                  </div>
+                  <button
+                    className="btn btn-sm btn-outline-primary rounded-pill px-3"
+                    onClick={() => {
+                      setCheckInput(item.uid);
+                      // [CẬP NHẬT] Bấm xem lại từ lịch sử
+                      verify(item.uid, "Xem lại từ lịch sử");
+                    }}
+                  >
+                    Xem lại
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container py-5 animate-in">
       <div className="text-center mb-5">
@@ -241,7 +338,6 @@ const UserDashboard = ({ onBack }) => {
         </p>
       </div>
 
-      {/* [CẬP NHẬT] Ô Tra cứu: Nhập Mã hoặc Tên */}
       <div
         className="glass-panel p-4 mx-auto text-center mb-5 rounded-pill shadow-lg"
         style={{ maxWidth: "700px" }}
@@ -252,11 +348,15 @@ const UserDashboard = ({ onBack }) => {
             placeholder="Nhập mã định danh sản phẩm"
             value={checkInput}
             onChange={(e) => setCheckInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && verify()}
+            // [CẬP NHẬT] Ghi nhận đây là "Tra cứu Web" khi nhấn Enter
+            onKeyDown={(e) =>
+              e.key === "Enter" && verify(checkInput, "Tra cứu Web")
+            }
           />
           <button
             className="btn btn-primary-gradient rounded-pill px-5 fw-bold"
-            onClick={() => verify()}
+            // [CẬP NHẬT] Ghi nhận đây là "Tra cứu Web" khi bấm nút Check
+            onClick={() => verify(checkInput, "Tra cứu Web")}
           >
             Check
           </button>
@@ -266,6 +366,13 @@ const UserDashboard = ({ onBack }) => {
             title="Quét mã QR"
           >
             <QrCode size={20} />
+          </button>
+          <button
+            className="btn btn-outline-secondary rounded-pill px-4 bg-white"
+            onClick={viewHistory}
+            title="Lịch sử của tôi"
+          >
+            <HistoryIcon size={20} className="text-dark" />
           </button>
         </div>
       </div>
@@ -280,7 +387,6 @@ const UserDashboard = ({ onBack }) => {
           </div>
 
           <div className="d-flex flex-wrap gap-2 align-items-center">
-            {/* [MỚI] Thanh tìm kiếm trong danh sách */}
             <div className="position-relative me-2">
               <input
                 type="text"
@@ -336,7 +442,8 @@ const UserDashboard = ({ onBack }) => {
                   <motion.div
                     whileHover={{ y: -10, transition: { duration: 0.2 } }}
                     className="glass-panel h-100 border-0 p-3 rounded-4 position-relative card-hover-effect"
-                    onClick={() => verify(p.uid)} // Khi click vào thẻ thì tìm theo UID cho chính xác
+                    // [CẬP NHẬT] Ghi nhận đây là click từ danh sách
+                    onClick={() => verify(p.uid, "Tra cứu từ Danh Sách")}
                     style={{ cursor: "pointer" }}
                   >
                     <div className="position-absolute top-0 end-0 m-3 bg-white rounded-circle p-2 shadow-sm z-1">
@@ -412,7 +519,8 @@ const UserDashboard = ({ onBack }) => {
         <QRScanner
           onScan={(uid) => {
             setShowScanner(false);
-            verify(uid);
+            // [CẬP NHẬT] Chỗ quan trọng nhất: Nhận diện Quét Camera
+            verify(uid, "Quét Camera");
           }}
           onClose={() => setShowScanner(false)}
         />

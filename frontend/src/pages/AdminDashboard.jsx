@@ -19,7 +19,7 @@ import {
   XCircle,
   Layers,
   FileText,
-  MessageSquare, // Giữ lại icon nếu bạn đã thêm từ trước, nếu chưa có thì có thể bỏ
+  MessageSquare,
   MessageCircle,
 } from "lucide-react";
 import { api } from "../services/api";
@@ -317,8 +317,6 @@ const AdminDashboard = ({ user, onLogout }) => {
               >
                 <Users size={20} className="me-2" /> Quản Lý Người Dùng
               </button>
-              {/* Nếu bạn đã thêm tab Feedback thì uncomment dòng dưới */}
-              {/* <button className={`btn text-start p-3 rounded-3 fw-bold ${activeTab === "feedback" ? "btn-primary text-white shadow" : "btn-light text-muted"}`} onClick={() => setActiveTab("feedback")}> <MessageSquare size={20} className="me-2" /> Ý Kiến Phản Hồi </button> */}
 
               <button
                 className="btn btn-light text-start p-3 rounded-3 fw-bold text-muted"
@@ -776,51 +774,10 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           )}
-
-          {/* Nếu bạn có tab Feedback, bạn có thể uncomment để hiển thị */}
-          {/* {activeTab === "feedback" && (
-            <div className="glass-panel p-4 rounded-4 animate-in">
-              <h4 className="fw-bold mb-4 text-primary">
-                <MessageCircle size={24} className="me-2" /> Ý Kiến Phản Hồi
-              </h4>
-              <div className="table-responsive">
-                <table className="table align-middle">
-                  <thead className="table-light">
-                    <tr><th className="ps-4">Người Gửi</th><th style={{ width: "40%" }}>Nội Dung</th><th>Trả Lời</th><th className="text-center">Trạng Thái</th></tr>
-                  </thead>
-                  <tbody>
-                    {feedbacks.map((fb) => (
-                      <tr key={fb._id} className={fb.status === "pending" ? "bg-light" : ""}>
-                        <td className="ps-4">
-                          <div className="fw-bold">{fb.fullname}</div>
-                          <small className="text-muted">@{fb.username}</small><br />
-                          <small className="text-muted">{new Date(fb.createdAt).toLocaleDateString("vi-VN")}</small>
-                        </td>
-                        <td>
-                          <div className="bg-white p-2 border rounded text-muted fst-italic mb-1">"{fb.content}"</div>
-                          {fb.reply && (<div className="text-primary small mt-1"><strong>Admin:</strong> {fb.reply}</div>)}
-                        </td>
-                        <td>
-                          {fb.status === "pending" ? (
-                            <button className="btn btn-sm btn-outline-primary rounded-pill" onClick={() => setReplyModal(fb._id)}>Trả lời</button>
-                          ) : (<span className="text-success small fw-bold">Đã xong</span>)}
-                        </td>
-                        <td className="text-center">
-                          {fb.status === "pending" ? <span className="badge bg-warning text-dark">Chờ xử lý</span> : <span className="badge bg-success">Đã trả lời</span>}
-                        </td>
-                      </tr>
-                    ))}
-                    {feedbacks.length === 0 && <tr><td colSpan="4" className="text-center py-4 text-muted">Chưa có phản hồi nào.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )} 
-          */}
         </div>
       </div>
 
-      {/* --- MODAL LỊCH SỬ ĐÃ CHIA TAB (THAY ĐỔI Ở ĐÂY) --- */}
+      {/* --- MODAL LỊCH SỬ GỘP CHUNG --- */}
       {showHistory && (
         <div
           className="modal d-block"
@@ -840,173 +797,53 @@ const AdminDashboard = ({ user, onLogout }) => {
                   onClick={() => setShowHistory(false)}
                 ></button>
               </div>
-              <div className="modal-body">
-                {/* Tabs chuyển đổi */}
-                <ul
-                  className="nav nav-pills mb-3 justify-content-center"
-                  id="pills-tab"
-                  role="tablist"
-                >
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link active rounded-pill fw-bold px-4"
-                      id="pills-scan-tab"
-                      data-bs-toggle="pill"
-                      data-bs-target="#pills-scan"
-                      type="button"
-                      role="tab"
-                      aria-controls="pills-scan"
-                      aria-selected="true"
-                    >
-                      📸 Quét QR (Camera)
-                    </button>
-                  </li>
-                  <li className="nav-item" role="presentation">
-                    <button
-                      className="nav-link rounded-pill fw-bold px-4 ms-2"
-                      id="pills-view-tab"
-                      data-bs-toggle="pill"
-                      data-bs-target="#pills-view"
-                      type="button"
-                      role="tab"
-                      aria-controls="pills-view"
-                      aria-selected="false"
-                    >
-                      🌐 Tra cứu Web
-                    </button>
-                  </li>
-                </ul>
-
-                <div className="tab-content" id="pills-tabContent">
-                  {/* Tab 1: Lịch sử Quét QR */}
-                  <div
-                    className="tab-pane fade show active"
-                    id="pills-scan"
-                    role="tabpanel"
-                  >
-                    <div
-                      className="table-responsive"
-                      style={{ maxHeight: "50vh" }}
-                    >
-                      <table className="table table-striped mb-0 align-middle">
-                        <thead className="table-light sticky-top">
-                          <tr>
-                            <th className="ps-4">Thời Gian</th>
-                            <th>Mã SP</th>
-                            <th>Vị Trí</th>
-                            <th>Trạng Thái</th>
+              <div className="modal-body pt-3">
+                <div className="table-responsive" style={{ maxHeight: "60vh" }}>
+                  <table className="table table-striped mb-0 align-middle">
+                    <thead className="table-light sticky-top">
+                      <tr>
+                        <th className="ps-4">Thời Gian</th>
+                        <th>Mã SP</th>
+                        <th>Người Tra Cứu</th>
+                        <th>Phương Thức</th>
+                        <th>Trạng Thái</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.length > 0 ? (
+                        history.map((h, i) => (
+                          <tr key={i}>
+                            <td className="ps-4 small text-muted">{h.time}</td>
+                            <td>
+                              <span className="badge bg-primary">{h.uid}</span>
+                            </td>
+                            <td className="small fw-bold text-dark">
+                              {h.username || "Khách"}
+                            </td>
+                            <td className="small text-muted">{h.location}</td>
+                            <td>
+                              {h.status === "valid" ? (
+                                <span className="badge bg-success">Hợp lệ</span>
+                              ) : (
+                                <span className="badge bg-danger">
+                                  Cảnh báo
+                                </span>
+                              )}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {history.filter((h) => h.action_type === "scan")
-                            .length > 0 ? (
-                            history
-                              .filter((h) => h.action_type === "scan")
-                              .map((h, i) => (
-                                <tr key={i}>
-                                  <td className="ps-4 small">{h.time}</td>
-                                  <td>
-                                    <span className="badge bg-primary">
-                                      {h.uid}
-                                    </span>
-                                  </td>
-                                  <td className="small text-muted">
-                                    {h.location}
-                                  </td>
-                                  <td>
-                                    {h.status === "valid" ? (
-                                      <span className="badge bg-success">
-                                        Hợp lệ
-                                      </span>
-                                    ) : (
-                                      <span className="badge bg-danger">
-                                        Cảnh báo
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                          ) : (
-                            <tr>
-                              <td
-                                colSpan="4"
-                                className="text-center text-muted py-3"
-                              >
-                                Chưa có dữ liệu quét QR.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Tab 2: Lịch sử Web */}
-                  <div
-                    className="tab-pane fade"
-                    id="pills-view"
-                    role="tabpanel"
-                  >
-                    <div
-                      className="table-responsive"
-                      style={{ maxHeight: "50vh" }}
-                    >
-                      <table className="table table-striped mb-0 align-middle">
-                        <thead className="table-light sticky-top">
-                          <tr>
-                            <th className="ps-4">Thời Gian</th>
-                            <th>Mã SP</th>
-                            <th>Vị Trí</th>
-                            <th>Trạng Thái</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {history.filter(
-                            (h) => h.action_type === "view" || !h.action_type,
-                          ).length > 0 ? (
-                            history
-                              .filter(
-                                (h) =>
-                                  h.action_type === "view" || !h.action_type,
-                              )
-                              .map((h, i) => (
-                                <tr key={i}>
-                                  <td className="ps-4 small">{h.time}</td>
-                                  <td>
-                                    <span className="badge bg-secondary">
-                                      {h.uid}
-                                    </span>
-                                  </td>
-                                  <td className="small text-muted">
-                                    {h.location}
-                                  </td>
-                                  <td>
-                                    {h.status === "valid" ? (
-                                      <span className="badge bg-success">
-                                        Hợp lệ
-                                      </span>
-                                    ) : (
-                                      <span className="badge bg-danger">
-                                        Không tìm thấy
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                          ) : (
-                            <tr>
-                              <td
-                                colSpan="4"
-                                className="text-center text-muted py-3"
-                              >
-                                Chưa có dữ liệu tra cứu web.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan="5"
+                            className="text-center text-muted py-4"
+                          >
+                            Chưa có dữ liệu tra cứu.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

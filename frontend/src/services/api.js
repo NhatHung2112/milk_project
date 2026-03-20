@@ -38,17 +38,29 @@ export const api = {
   },
 
   // Ghi lại lịch sử quét
-  // [MỚI] Thêm tham số action_type (mặc định là 'view')
-  recordScan: async (uid, location, status = "valid", action_type = "view") => {
+  // [MỚI] Thêm tham số action_type (mặc định là 'view') và username
+  recordScan: async (
+    uid,
+    location,
+    status = "valid",
+    action_type = "view",
+    username = "Khách",
+  ) => {
     await fetch(`${API_URL}/record_scan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, location, status, action_type }),
+      body: JSON.stringify({ uid, location, status, action_type, username }),
     });
   },
   // Lấy lịch sử quét (Cho Admin)
   getHistory: async () => {
     const res = await fetch(`${API_URL}/scan_history`);
+    return res.json();
+  },
+
+  // [MỚI] Lấy lịch sử quét (Cho User cá nhân)
+  getUserHistory: async (username) => {
+    const res = await fetch(`${API_URL}/user_history/${username}`);
     return res.json();
   },
 
