@@ -16,29 +16,30 @@ import { motion, AnimatePresence } from "framer-motion";
 const HomePage = ({ onStart }) => {
   // --- STATE QUẢN LÝ SLIDE ---
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [direction, setDirection] = useState(1); // 1: Trượt sang trái, -1: Trượt sang phải
+  const [direction, setDirection] = useState(1);
 
+  // DANH SÁCH SLIDE
   const slides = [
     {
       id: 1,
       title: "Dữ Liệu Không Thể Giả Mạo",
       desc: "Mọi thông tin sản xuất đều được mã hóa và lưu trữ vĩnh viễn trên Blockchain.",
       icon: <Lock size={40} className="mb-2 text-warning" />,
-      img: "https://placehold.co/1200x400/2c3e50/ffffff?text=.",
+      img: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=1200&auto=format&fit=crop",
     },
     {
       id: 2,
       title: "Hàng Triệu Người Tin Dùng",
       desc: "Được các bà mẹ và chuyên gia dinh dưỡng khuyên dùng để bảo vệ sức khỏe gia đình.",
       icon: <Users size={40} className="mb-2 text-white" />,
-      img: "https://placehold.co/1200x400/198754/ffffff?text=.",
+      img: "https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop",
     },
     {
       id: 3,
       title: "Truy Xuất Nguồn Gốc 24/7",
       desc: "Hệ thống hoạt động liên tục, giúp bạn kiểm tra sản phẩm mọi lúc, mọi nơi.",
       icon: <Database size={40} className="mb-2 text-info" />,
-      img: "https://placehold.co/1200x400/0d6efd/ffffff?text=.",
+      img: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1200&auto=format&fit=crop",
     },
   ];
 
@@ -60,7 +61,6 @@ const HomePage = ({ onStart }) => {
     setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
   };
 
-  // Hàm cuộn xuống
   const scrollToContent = () => {
     const element = document.getElementById("info-section");
     if (element) {
@@ -68,42 +68,39 @@ const HomePage = ({ onStart }) => {
     }
   };
 
-  // Cấu hình hiệu ứng trượt
   const slideVariants = {
     enter: (direction) => ({
-      x: direction > 0 ? "100%" : "-100%", // Vào từ phải (nếu next) hoặc trái (nếu prev)
+      x: direction > 0 ? "100%" : "-100%",
       opacity: 1,
     }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
+    center: { x: 0, opacity: 1 },
     exit: (direction) => ({
-      x: direction > 0 ? "-100%" : "100%", // Ra về bên trái (nếu next) hoặc phải (nếu prev)
+      x: direction > 0 ? "-100%" : "100%",
       opacity: 1,
     }),
   };
 
+  // [ĐÃ CẬP NHẬT] DANH SÁCH TIN TỨC CÓ HÌNH ẢNH THẬT
   const newsList = [
     {
       id: 1,
       title: "Cảnh báo sữa giả tràn lan thị trường",
       desc: "Cơ quan chức năng phát hiện nhiều cơ sở làm giả sữa bột. Hãy dùng Family Milk để kiểm tra nguồn gốc ngay.",
-      img: "https://placehold.co/600x400/dc3545/white?text=Cảnh+Báo+Sữa+Giả",
+      img: "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?q=80&w=600&auto=format&fit=crop", // Ảnh phòng thí nghiệm kiểm tra chất lượng
       date: "12/01/2026",
     },
     {
       id: 2,
       title: "Công nghệ Blockchain: Kỷ nguyên mới",
       desc: "Dữ liệu sản phẩm một khi đã ghi lên Blockchain sẽ không thể bị sửa đổi, đảm bảo tính trung thực tuyệt đối.",
-      img: "https://placehold.co/600x400/0d6efd/white?text=Blockchain+Technology",
+      img: "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?q=80&w=600&auto=format&fit=crop", // Ảnh công nghệ số/Node mạng
       date: "10/01/2026",
     },
     {
       id: 3,
       title: "Family Milk đạt chuẩn ISO 22000",
       desc: "Hệ thống quản lý của chúng tôi vừa được cấp chứng nhận quốc tế về an toàn thực phẩm.",
-      img: "https://placehold.co/600x400/198754/white?text=Chứng+Nhận+ISO",
+      img: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=600&auto=format&fit=crop", // Ảnh chứng nhận/tiêu chuẩn
       date: "08/01/2026",
     },
   ];
@@ -111,71 +108,113 @@ const HomePage = ({ onStart }) => {
   return (
     <div className="bg-white">
       {/* HERO SECTION */}
-      <div className="container flex-grow-1 d-flex align-items-center justify-content-center text-center py-5 min-vh-100">
-        <div>
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            className="badge bg-white text-primary px-4 py-2 rounded-pill mb-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2"
-          >
-            <span
-              className="status-dot bg-success rounded-circle"
-              style={{ width: 8, height: 8 }}
-            ></span>
-            Mạng Lưới Blockchain 4.0
-          </motion.span>
-
-          <motion.h1
+      <div
+        className="position-relative min-vh-100 d-flex align-items-center justify-content-center py-5 overflow-hidden"
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1500595046743-cd271d694d30?q=80&w=2074&auto=format&fit=crop')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+        }}
+      >
+        <div
+          className="position-absolute top-0 start-0 w-100 h-100 bg-dark"
+          style={{ opacity: 0.35 }}
+        ></div>
+        <div className="container position-relative z-1">
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="display-2 fw-bold mb-4 text-dark lh-tight"
-            style={{ letterSpacing: "-2px" }}
+            transition={{ duration: 0.8 }}
+            className="mx-auto p-5 rounded-5 text-center shadow-lg"
+            style={{
+              maxWidth: "800px",
+              background: "rgba(255, 255, 255, 0.15)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+            }}
           >
-            Minh Bạch Nguồn Gốc
-            <br />
-            <span className="text-gradient">An Tâm Cho Mọi Nhà</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-muted fs-5 mb-5 mx-auto"
-            style={{ maxWidth: "650px", lineHeight: "1.8" }}
-          >
-            Ứng dụng công nghệ Blockchain giúp bạn kiểm tra chính xác nguồn gốc,
-            thời hạn và chất lượng của từng hộp sữa chỉ trong 1 giây.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="d-flex gap-3 justify-content-center flex-wrap"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="btn btn-primary-gradient btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg d-flex align-items-center"
-              onClick={onStart}
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 260,
+                damping: 20,
+                delay: 0.2,
+              }}
+              className="badge bg-white text-success px-4 py-2 rounded-pill mb-4 fw-bold shadow-sm d-inline-flex align-items-center gap-2"
             >
-              Tra Cứu Ngay <ArrowRight size={20} className="ms-2" />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="btn btn-white btn-lg rounded-pill px-5 py-3 fw-bold shadow-sm text-primary"
-              onClick={scrollToContent}
+              <span
+                className="status-dot bg-success rounded-circle"
+                style={{ width: 8, height: 8 }}
+              ></span>
+              100% Nguồn Gốc Thiên Nhiên
+            </motion.span>
+
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="display-3 fw-bold mb-4 text-white lh-tight"
+              style={{
+                letterSpacing: "-1px",
+                textShadow: "0 2px 10px rgba(0,0,0,0.3)",
+              }}
             >
-              Tìm Hiểu Thêm
-            </motion.button>
+              Minh Bạch Nguồn Gốc
+              <br />
+              <span className="text-warning">An Tâm Cho Mọi Nhà</span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="text-white fs-5 mb-5 mx-auto opacity-100 fw-medium"
+              style={{
+                lineHeight: "1.8",
+                textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+              }}
+            >
+              Ứng dụng công nghệ Blockchain giúp bạn kiểm tra chính xác hành
+              trình của từng giọt sữa từ đồng cỏ xanh đến tận tay gia đình bạn.
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              className="d-flex gap-3 justify-content-center flex-wrap"
+            >
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="btn btn-success btn-lg rounded-pill px-5 py-3 fw-bold shadow-lg d-flex align-items-center border-0"
+                onClick={onStart}
+              >
+                Tra Cứu Ngay <ArrowRight size={20} className="ms-2" />
+              </motion.button>
+              <motion.button
+                whileHover={{
+                  scale: 1.05,
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                }}
+                whileTap={{ scale: 0.95 }}
+                className="btn btn-outline-light btn-lg rounded-pill px-5 py-3 fw-bold shadow-sm"
+                style={{ borderWidth: "2px" }}
+                onClick={scrollToContent}
+              >
+                Tìm Hiểu Thêm
+              </motion.button>
+            </motion.div>
           </motion.div>
         </div>
       </div>
 
-      {/* [ĐÃ SỬA] CAROUSEL TRƯỢT (SLIDE EFFECT) */}
+      {/* CAROUSEL TRƯỢT */}
       <div id="info-section" className="py-5 bg-light">
         <div className="container">
           <div className="text-center mb-5">
@@ -189,7 +228,6 @@ const HomePage = ({ onStart }) => {
             className="position-relative rounded-4 overflow-hidden shadow-lg bg-dark"
             style={{ height: "400px" }}
           >
-            {/* Slide Images */}
             <AnimatePresence initial={false} custom={direction}>
               <motion.div
                 key={currentSlide}
@@ -227,7 +265,6 @@ const HomePage = ({ onStart }) => {
               </motion.div>
             </AnimatePresence>
 
-            {/* Controls */}
             <button
               className="btn position-absolute top-50 start-0 translate-middle-y ms-3 bg-white bg-opacity-25 text-white rounded-circle p-2 border-0 hover-scale z-1"
               onClick={prevSlide}
@@ -241,7 +278,6 @@ const HomePage = ({ onStart }) => {
               <ChevronRight size={32} />
             </button>
 
-            {/* Indicators */}
             <div className="position-absolute bottom-0 start-50 translate-middle-x mb-3 d-flex gap-2 z-1">
               {slides.map((_, index) => (
                 <button
@@ -250,11 +286,7 @@ const HomePage = ({ onStart }) => {
                     setDirection(index > currentSlide ? 1 : -1);
                     setCurrentSlide(index);
                   }}
-                  className={`btn p-0 rounded-circle transition-all ${
-                    index === currentSlide
-                      ? "bg-white"
-                      : "bg-white bg-opacity-50"
-                  }`}
+                  className={`btn p-0 rounded-circle transition-all ${index === currentSlide ? "bg-white" : "bg-white bg-opacity-50"}`}
                   style={{ width: "12px", height: "12px", border: "none" }}
                 />
               ))}
@@ -263,7 +295,7 @@ const HomePage = ({ onStart }) => {
         </div>
       </div>
 
-      {/* NEWS SECTION */}
+      {/* NEWS SECTION (Đã sửa hình ảnh) */}
       <div className="py-5 bg-white">
         <div className="container">
           <div className="d-flex justify-content-between align-items-end mb-4">
@@ -280,7 +312,6 @@ const HomePage = ({ onStart }) => {
               Xem tất cả &rarr;
             </button>
           </div>
-
           <div className="row g-4">
             {newsList.map((news) => (
               <div key={news.id} className="col-md-4">
@@ -320,40 +351,96 @@ const HomePage = ({ onStart }) => {
       {/* FEATURES SECTION */}
       <div className="py-5 bg-light">
         <div className="container">
+          <div className="text-center mb-5">
+            <span className="badge bg-primary text-white px-3 py-2 rounded-pill mb-2 fw-bold bg-opacity-75">
+              GIÁ TRỊ CỐT LÕI
+            </span>
+            <h2 className="fw-bold display-6">Cam Kết Từ Family Milk</h2>
+          </div>
+
           <div className="row g-4 text-center">
+            {/* Card 1: Bảo Mật */}
             <div className="col-md-4">
-              <div className="p-4 rounded-4 bg-white shadow-sm h-100">
-                <div className="bg-primary bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                  <ShieldCheck size={32} className="text-primary" />
+              <motion.div
+                whileHover={{ y: -10 }}
+                className="card border-0 shadow-sm rounded-4 overflow-hidden h-100"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1639322537228-f710d846310a?q=80&w=800&auto=format&fit=crop"
+                  alt="Bảo Mật Blockchain"
+                  className="card-img-top"
+                  style={{ height: "220px", objectFit: "cover" }}
+                />
+                <div className="card-body p-4 bg-white position-relative">
+                  <div
+                    className="bg-white p-3 rounded-circle shadow d-inline-block position-absolute start-50 translate-middle-x"
+                    style={{ top: "-25px" }}
+                  >
+                    <ShieldCheck size={32} className="text-primary" />
+                  </div>
+                  <h5 className="fw-bold mt-4 mb-3">Bảo Mật Tuyệt Đối</h5>
+                  <p className="text-muted small mb-0">
+                    Thông tin được mã hóa bằng thuật toán SHA-256 trên nền tảng
+                    Blockchain, ngăn chặn mọi hành vi làm giả và sao chép.
+                  </p>
                 </div>
-                <h5 className="fw-bold">Bảo Mật Cao</h5>
-                <p className="text-muted small">
-                  Thông tin được mã hóa SHA-256, ngăn chặn mọi hành vi gian lận.
-                </p>
-              </div>
+              </motion.div>
             </div>
+
+            {/* Card 2: Vận chuyển */}
             <div className="col-md-4">
-              <div className="p-4 rounded-4 bg-white shadow-sm h-100">
-                <div className="bg-success bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                  <Truck size={32} className="text-success" />
+              <motion.div
+                whileHover={{ y: -10 }}
+                className="card border-0 shadow-sm rounded-4 overflow-hidden h-100"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?q=80&w=800&auto=format&fit=crop"
+                  alt="Vận Chuyển"
+                  className="card-img-top"
+                  style={{ height: "220px", objectFit: "cover" }}
+                />
+                <div className="card-body p-4 bg-white position-relative">
+                  <div
+                    className="bg-white p-3 rounded-circle shadow d-inline-block position-absolute start-50 translate-middle-x"
+                    style={{ top: "-25px" }}
+                  >
+                    <Truck size={32} className="text-success" />
+                  </div>
+                  <h5 className="fw-bold mt-4 mb-3">Minh Bạch Vận Chuyển</h5>
+                  <p className="text-muted small mb-0">
+                    Theo dõi trực tiếp lộ trình của từng hộp sữa từ nhà máy sản
+                    xuất, kho vận lưu trữ đến tận tay người tiêu dùng.
+                  </p>
                 </div>
-                <h5 className="fw-bold">Minh Bạch Vận Chuyển</h5>
-                <p className="text-muted small">
-                  Theo dõi lộ trình từ nhà máy, kho vận đến cửa hàng bán lẻ.
-                </p>
-              </div>
+              </motion.div>
             </div>
+
+            {/* Card 3: Chất lượng */}
             <div className="col-md-4">
-              <div className="p-4 rounded-4 bg-white shadow-sm h-100">
-                <div className="bg-warning bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                  <Award size={32} className="text-warning" />
+              <motion.div
+                whileHover={{ y: -10 }}
+                className="card border-0 shadow-sm rounded-4 overflow-hidden h-100"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1563636619-e9143da7973b?q=80&w=800&auto=format&fit=crop"
+                  alt="Chuẩn Quốc Tế"
+                  className="card-img-top"
+                  style={{ height: "220px", objectFit: "cover" }}
+                />
+                <div className="card-body p-4 bg-white position-relative">
+                  <div
+                    className="bg-white p-3 rounded-circle shadow d-inline-block position-absolute start-50 translate-middle-x"
+                    style={{ top: "-25px" }}
+                  >
+                    <Award size={32} className="text-warning" />
+                  </div>
+                  <h5 className="fw-bold mt-4 mb-3">Chuẩn Quốc Tế</h5>
+                  <p className="text-muted small mb-0">
+                    Mọi sản phẩm đều được kiểm định nghiêm ngặt, tuân thủ các
+                    tiêu chuẩn ISO 22000 và HACCP về an toàn thực phẩm.
+                  </p>
                 </div>
-                <h5 className="fw-bold">Chuẩn Quốc Tế</h5>
-                <p className="text-muted small">
-                  Tuân thủ nghiêm ngặt các tiêu chuẩn ISO và HACCP về an toàn
-                  sữa.
-                </p>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
