@@ -322,7 +322,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 className="btn btn-light text-start p-3 rounded-3 fw-bold text-muted"
                 onClick={loadHistory}
               >
-                <History size={20} className="me-2" /> Lịch Sử Quét QR
+                <History size={20} className="me-2" /> Lịch Sử Tra Cứu
               </button>
             </div>
           </div>
