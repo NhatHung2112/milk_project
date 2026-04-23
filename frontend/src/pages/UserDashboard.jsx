@@ -11,7 +11,7 @@ import {
   X,
   History as HistoryIcon,
   User as UserIcon,
-  AlertTriangle, // [MỚI] Thêm icon cảnh báo
+  AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import QRScanner from "../components/QRScanner";
@@ -68,10 +68,27 @@ const UserDashboard = ({ onBack }) => {
     const currentUser = JSON.parse(localStorage.getItem("user"));
     const username = currentUser ? currentUser.username : "Khách";
 
+    // --- TÍNH SỐ LẦN TÀI KHOẢN NÀY ĐÃ QUÉT SẢN PHẨM NÀY ---
+    let userScanCountForProduct = 0;
+    if (username !== "Khách") {
+      try {
+        const historyData = await api.getUserHistory(username);
+        userScanCountForProduct = historyData.filter(
+          (item) => item.uid === target,
+        ).length;
+      } catch (error) {
+        console.error("Lỗi kiểm tra lịch sử:", error);
+      }
+    }
+
     try {
       const data = await api.verifyProduct(target);
       if (data.is_valid) {
-        setDetail({ ...data, uid: data.uid });
+        setDetail({
+          ...data,
+          uid: data.uid,
+          userScanCount: userScanCountForProduct,
+        });
         setView("detail");
         api.recordScan(data.uid, scanMethod, "valid", "scan", username);
       } else {
@@ -197,26 +214,25 @@ const UserDashboard = ({ onBack }) => {
                 <CheckCircle size={18} /> SẢN PHẨM CHÍNH HÃNG
               </div>
 
-              {/* [MỚI] Hiển thị cảnh báo nếu quét quá nhiều lần */}
-              {detail.scan_count > 5 && (
+              {/* --- HIỂN THỊ CẢNH BÁO TỪ LẦN QUÉT THỨ 6 TRỞ ĐI --- */}
+              {detail.userScanCount >= 5 && (
                 <div
-                  className="alert alert-warning d-flex align-items-start mb-3 border-warning shadow-sm rounded-4"
+                  className="alert alert-danger d-flex align-items-start mb-3 border-danger shadow-sm rounded-4"
                   role="alert"
                 >
                   <AlertTriangle
-                    className="me-3 text-warning flex-shrink-0 mt-1"
+                    className="me-3 text-danger flex-shrink-0 mt-1"
                     size={24}
                   />
                   <div>
-                    <h6 className="fw-bold mb-1 text-dark">
+                    <h6 className="fw-bold mb-1 text-danger">
                       ⚠️ Cảnh báo an toàn!
                     </h6>
-                    <small className="text-dark">
-                      Sản phẩm này đã được quét{" "}
-                      <strong>{detail.scan_count} lần</strong>. Lượt quét cao
-                      bất thường cho thấy mã QR này có thể đã bị làm giả (sao
-                      chép dán lên nhiều hộp khác nhau). Hãy kiểm tra kỹ tem
-                      niêm phong vật lý!
+                    <small className="text-danger">
+                      Sản phẩm này đã được tài khoản của bạn quét{" "}
+                      <strong>{detail.userScanCount} lần</strong> trước đó. Đây
+                      là lần quét thứ {detail.userScanCount + 1}, hãy cẩn thận
+                      nguy cơ hàng giả hoặc vỏ hộp cũ bị in đè tem mã QR!
                     </small>
                   </div>
                 </div>

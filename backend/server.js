@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
+const path = require("path"); // [MỚI BỔ SUNG] Thư viện đường dẫn
 const connectDB = require("./database");
 const { Product, History, User } = require("./models");
 const {
@@ -17,6 +18,9 @@ const PORT = 8000;
 // --- MIDDLEWARE ---
 app.use(cors());
 app.use(express.json());
+
+// [MỚI BỔ SUNG] Phục vụ file giao diện Frontend (Thư mục dist)
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
 // --- KHỞI ĐỘNG DỊCH VỤ ---
 connectDB();
@@ -47,7 +51,14 @@ app.post("/create_product", async (req, res) => {
       p.batch_number,
       p.expiry_date_unix,
     );
-    const clientURL = p.qr_url || `http://localhost:5173?uid=${p.uid}`;
+    // [CẬP NHẬT] Đổi host quét QR linh động theo tên miền thực tế
+    const host = req.get("host");
+    const protocol =
+      req.protocol === "https" || req.headers["x-forwarded-proto"] === "https"
+        ? "https"
+        : "http";
+    const clientURL = p.qr_url || `${protocol}://${host}/?uid=${p.uid}`;
+
     const qrBase64 = await QRCode.toDataURL(clientURL);
 
     const newProduct = new Product({
@@ -83,6 +94,12 @@ app.post("/create_products_bulk", async (req, res) => {
     const products = req.body.products;
     const results = [];
 
+    const host = req.get("host");
+    const protocol =
+      req.protocol === "https" || req.headers["x-forwarded-proto"] === "https"
+        ? "https"
+        : "http";
+
     for (const p of products) {
       try {
         if (await Product.findOne({ uid: p.uid })) {
@@ -96,7 +113,7 @@ app.post("/create_products_bulk", async (req, res) => {
           p.batch_number,
           p.expiry_date_unix,
         );
-        const clientURL = `http://localhost:5173?uid=${p.uid}`;
+        const clientURL = `${protocol}://${host}/?uid=${p.uid}`;
         const qrBase64 = await QRCode.toDataURL(clientURL);
 
         const newProduct = new Product({
@@ -127,6 +144,64 @@ app.post("/create_products_bulk", async (req, res) => {
   }
 });
 
+app.put("/update_product/:uid", async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const updateData = req.body;
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { uid: uid },
+      { $set: updateData },
+      { new: true },
+    );
+
+    if (!updatedProduct) {
+      return res.json({ status: "error", message: "Không tìm thấy sản phẩm!" });
+    }
+
+    res.json({
+      status: "success",
+      message: "Cập nhật thành công!",
+      product: updatedProduct,
+    });
+  } catch (e) {
+    console.error("Update Error:", e);
+    res.status(500).json({ status: "error", message: e.message });
+  }
+});
+
+app.delete("/delete_product/:uid", async (req, res) => {
+  try {
+    const { uid } = req.params;
+
+    const deletedProduct = await Product.findOneAndDelete({ uid: uid });
+    if (!deletedProduct) {
+      return res.json({ status: "error", message: "Không tìm thấy sản phẩm!" });
+    }
+
+    res.json({ status: "success", message: "Xóa sản phẩm thành công!" });
+  } catch (e) {
+    console.error("Delete Error:", e);
+    res.status(500).json({ status: "error", message: e.message });
+  }
+});
+
+app.post("/delete_products_bulk", async (req, res) => {
+  try {
+    const { uids } = req.body;
+    if (!uids || !Array.isArray(uids)) {
+      return res.json({ status: "error", message: "Danh sách không hợp lệ!" });
+    }
+
+    await Product.deleteMany({ uid: { $in: uids } });
+
+    res.json({ status: "success", message: "Xóa nhiều sản phẩm thành công!" });
+  } catch (e) {
+    console.error("Delete Bulk Error:", e);
+    res.status(500).json({ status: "error", message: e.message });
+  }
+});
+
 app.get("/verify/:uid", async (req, res) => {
   try {
     const query = req.params.uid;
@@ -145,7 +220,7 @@ app.get("/verify/:uid", async (req, res) => {
         product_image: p.product_image,
         description: p.description,
         tx_hash: p.tx_hash,
-        scan_count: p.scan_count, // [MỚI] Trả về số lần quét
+        scan_count: p.scan_count,
         source: "Database",
       });
     }
@@ -317,12 +392,15 @@ app.get("/clear_database", async (req, res) => {
   try {
     await Product.deleteMany({});
     await History.deleteMany({});
-    res.send(
-      "<h1>✅ Đã xóa sạch Database! Giờ bạn có thể Import lại từ đầu.</h1>",
-    );
+    res.send("<h1>✅ Đã xóa sạch Database!</h1>");
   } catch (e) {
     res.status(500).send("Lỗi: " + e.message);
   }
+});
+
+// [MỚI BỔ SUNG] Đặt ở CÙNG, bắt mọi request (không phải API) để trả về React App
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
 });
 
 app.listen(PORT, () => {

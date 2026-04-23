@@ -21,6 +21,8 @@ import {
   FileText,
   MessageSquare,
   MessageCircle,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { api } from "../services/api";
 import {
@@ -44,32 +46,28 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [users, setUsers] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  // [MỚI] State cho Feedback (Giữ lại logic nếu bạn đã merge code trước, nếu chưa thì dòng này không ảnh hưởng)
-  const [feedbacks, setFeedbacks] = useState([]);
-  const [replyModal, setReplyModal] = useState(null);
-  const [replyText, setReplyText] = useState("");
-
-  // State tìm kiếm
   const [searchTerm, setSearchTerm] = useState("");
-
-  // State lọc lô hàng (all, safe, warning, expired)
   const [batchFilter, setBatchFilter] = useState("all");
 
   const [hiddenList, setHiddenList] = useState(
     JSON.parse(localStorage.getItem("hidden_products") || "[]"),
   );
 
-  // State nhập Excel
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef(null);
+
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+
+  // --- CẬP NHẬT STATE CHO LOGIC SẢN PHẨM -> LÔ ---
+  const [expandedProduct, setExpandedProduct] = useState(null);
+  const [expandedBatchDetail, setExpandedBatchDetail] = useState(null);
 
   const loadData = async () => {
     const data = await api.getProducts();
     setProducts(data);
     const usersData = await api.getUsers();
     setUsers(usersData);
-    // Nếu bạn có API feedback thì uncomment dòng dưới
-    // const fb = await api.getFeedbacks(); setFeedbacks(fb);
   };
 
   useEffect(() => {
@@ -90,6 +88,76 @@ const AdminDashboard = ({ user, onLogout }) => {
     } else alert("❌ Lỗi: " + res.message);
   };
 
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+
+    if (data.p_date) {
+      data.expiry_date_unix = Math.floor(
+        new Date(data.p_date).getTime() / 1000,
+      );
+      data.expiry_date = new Date(data.p_date).toLocaleDateString("vi-VN");
+    }
+
+    const res = await api.updateProduct(editingProduct.uid, data);
+    if (res.status === "success") {
+      alert("✅ Cập nhật thành công!");
+      setEditingProduct(null);
+      loadData();
+    } else {
+      alert("❌ Lỗi: " + res.message);
+    }
+  };
+
+  const handleDelete = async (uid) => {
+    if (
+      window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn sản phẩm mã ${uid}?`)
+    ) {
+      const res = await api.deleteProduct(uid);
+      if (res.status === "success") {
+        alert("✅ Đã xóa thành công!");
+        loadData();
+      } else {
+        alert("❌ Lỗi: " + res.message);
+      }
+    }
+  };
+
+  const handleSelectAll = (e, currentFilteredList) => {
+    if (e.target.checked) {
+      const allUids = currentFilteredList.map((p) => p.uid);
+      setSelectedProducts(allUids);
+    } else {
+      setSelectedProducts([]);
+    }
+  };
+
+  const handleSelectOne = (uid) => {
+    if (selectedProducts.includes(uid)) {
+      setSelectedProducts(selectedProducts.filter((id) => id !== uid));
+    } else {
+      setSelectedProducts([...selectedProducts, uid]);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (
+      window.confirm(
+        `Bạn có chắc chắn muốn xóa ${selectedProducts.length} sản phẩm đã chọn?`,
+      )
+    ) {
+      const res = await api.deleteProductsBulk(selectedProducts);
+      if (res.status === "success") {
+        alert("✅ Đã xóa thành công danh sách đã chọn!");
+        setSelectedProducts([]);
+        loadData();
+      } else {
+        alert("❌ Lỗi: " + res.message);
+      }
+    }
+  };
+
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -108,16 +176,27 @@ const AdminDashboard = ({ user, onLogout }) => {
 
           const clean = (str) => (str ? str.replace(/^"|"$/g, "").trim() : "");
 
+          const expStr = clean(cols[4]);
+          let expUnix = 0;
+
+          if (expStr && expStr.includes("/")) {
+            const parts = expStr.split("/");
+            if (parts.length === 3) {
+              expUnix = Math.floor(
+                new Date(parts[2], parts[1] - 1, parts[0]).getTime() / 1000,
+              );
+            }
+          } else {
+            expUnix = Math.floor(new Date(expStr).getTime() / 1000);
+          }
+
           return {
             uid: clean(cols[0]),
             name: clean(cols[1]),
             category: clean(cols[2]),
             batch_number: clean(cols[3]),
-            expiry_date: clean(cols[4]),
-            // Tính unix timestamp cho việc tính toán ngày còn lại
-            expiry_date_unix: Math.floor(
-              new Date(clean(cols[4])).getTime() / 1000,
-            ),
+            expiry_date: expStr,
+            expiry_date_unix: expUnix,
             product_image: clean(cols[5]) || "https://placehold.co/400",
             description: cols.slice(6).join(",").replace(/^"|"$/g, ""),
           };
@@ -148,7 +227,6 @@ const AdminDashboard = ({ user, onLogout }) => {
     e.target.value = "";
   };
 
-  // --- LOGIC TÍNH HẠN SỬ DỤNG ---
   const getDaysRemaining = (p) => {
     if (p.expiry_unix) {
       const expiry = p.expiry_unix * 1000;
@@ -203,14 +281,43 @@ const AdminDashboard = ({ user, onLogout }) => {
     } else if (batchFilter === "safe") {
       result = result.filter((p) => getDaysRemaining(p) > 30);
     }
-    return result.sort((a, b) => {
-      const daysA = getDaysRemaining(a);
-      const daysB = getDaysRemaining(b);
-      return daysA - daysB;
-    });
+    return result;
   };
 
-  const batchList = getFilteredBatches();
+  // --- CẬP NHẬT LOGIC: NHÓM THEO "SẢN PHẨM" TRƯỚC, RỒI TỚI "LÔ" ---
+  const getGroupedProducts = () => {
+    const rawList = getFilteredBatches();
+    const grouped = {};
+
+    rawList.forEach((p) => {
+      // 1. Tạo nhóm Sản phẩm (Product) nếu chưa có
+      if (!grouped[p.name]) {
+        grouped[p.name] = {
+          name: p.name,
+          category: p.category,
+          total_items: 0,
+          batches: {}, // Chứa các lô của sản phẩm này
+        };
+      }
+      grouped[p.name].total_items += 1;
+
+      // 2. Phân loại sản phẩm vào Lô tương ứng
+      if (!grouped[p.name].batches[p.batch_number]) {
+        grouped[p.name].batches[p.batch_number] = {
+          batch_number: p.batch_number,
+          expiry_date: p.expiry_date,
+          expiry_unix: p.expiry_unix,
+          items: [],
+        };
+      }
+      grouped[p.name].batches[p.batch_number].items.push(p);
+    });
+
+    // Trả về mảng các sản phẩm, xếp theo tên Alpha B
+    return Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const groupedProductList = getGroupedProducts();
 
   const toggleHide = (uid) => {
     const newList = hiddenList.includes(uid)
@@ -405,6 +512,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             </div>
           )}
+
           {activeTab === "products" && (
             <div className="glass-panel p-4 rounded-4 animate-in">
               <UpdateExcel onSuccess={loadData} />
@@ -515,12 +623,24 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <h5 className="fw-bold m-0">
                       <List size={20} className="me-1" /> Danh Sách
                     </h5>
-                    <button
-                      className="btn btn-sm btn-light rounded-pill border"
-                      onClick={loadData}
-                    >
-                      <RefreshCcw size={16} />
-                    </button>
+
+                    <div className="d-flex gap-2">
+                      {selectedProducts.length > 0 && (
+                        <button
+                          className="btn btn-sm btn-danger rounded-pill shadow-sm d-flex align-items-center"
+                          onClick={handleBulkDelete}
+                        >
+                          <Trash2 size={16} className="me-1" /> Xóa (
+                          {selectedProducts.length})
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-sm btn-light rounded-pill border"
+                        onClick={loadData}
+                      >
+                        <RefreshCcw size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="input-group mb-3 shadow-sm">
@@ -551,7 +671,24 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <table className="table fs-6">
                       <thead className="table-light sticky-top">
                         <tr>
-                          <th className="rounded-start">ID</th>
+                          <th
+                            className="rounded-start text-center"
+                            style={{ width: "40px" }}
+                          >
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              onChange={(e) =>
+                                handleSelectAll(e, filteredProducts)
+                              }
+                              checked={
+                                filteredProducts.length > 0 &&
+                                selectedProducts.length ===
+                                  filteredProducts.length
+                              }
+                            />
+                          </th>
+                          <th>ID</th>
                           <th>Tên</th>
                           <th className="text-center">Quét</th>
                           <th className="text-center rounded-end">Hành động</th>
@@ -566,6 +703,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 opacity: hiddenList.includes(p.uid) ? 0.5 : 1,
                               }}
                             >
+                              <td className="text-center">
+                                <input
+                                  type="checkbox"
+                                  className="form-check-input"
+                                  checked={selectedProducts.includes(p.uid)}
+                                  onChange={() => handleSelectOne(p.uid)}
+                                />
+                              </td>
                               <td>
                                 <span className="badge bg-light text-dark border">
                                   {p.uid}
@@ -575,31 +720,50 @@ const AdminDashboard = ({ user, onLogout }) => {
                               <td className="text-center small">
                                 {p.scan_count || 0}
                               </td>
+
                               <td className="text-center">
-                                <button
-                                  className={`btn btn-sm border-0 ${
-                                    hiddenList.includes(p.uid)
-                                      ? "text-muted"
-                                      : "text-primary"
-                                  }`}
-                                  onClick={() => toggleHide(p.uid)}
-                                  title={
-                                    hiddenList.includes(p.uid) ? "Hiện" : "Ẩn"
-                                  }
-                                >
-                                  {hiddenList.includes(p.uid) ? (
-                                    <EyeOff size={16} />
-                                  ) : (
-                                    <Eye size={16} />
-                                  )}
-                                </button>
+                                <div className="d-flex justify-content-center align-items-center gap-2">
+                                  <button
+                                    className="btn btn-sm border-0 text-primary p-0"
+                                    onClick={() => setEditingProduct(p)}
+                                    title="Sửa"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+
+                                  <button
+                                    className="btn btn-sm border-0 text-danger p-0"
+                                    onClick={() => handleDelete(p.uid)}
+                                    title="Xóa"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+
+                                  <button
+                                    className={`btn btn-sm border-0 p-0 ${
+                                      hiddenList.includes(p.uid)
+                                        ? "text-muted"
+                                        : "text-secondary"
+                                    }`}
+                                    onClick={() => toggleHide(p.uid)}
+                                    title={
+                                      hiddenList.includes(p.uid) ? "Hiện" : "Ẩn"
+                                    }
+                                  >
+                                    {hiddenList.includes(p.uid) ? (
+                                      <EyeOff size={16} />
+                                    ) : (
+                                      <Eye size={16} />
+                                    )}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
                         ) : (
                           <tr>
                             <td
-                              colSpan="4"
+                              colSpan="5"
                               className="text-center text-muted py-3"
                             >
                               Không tìm thấy sản phẩm nào.
@@ -652,10 +816,12 @@ const AdminDashboard = ({ user, onLogout }) => {
 
           {activeTab === "batches" && (
             <div className="glass-panel p-4 rounded-4 animate-in">
-              <h4 className="fw-bold mb-4 text-primary">
-                <AlertTriangle size={20} className="me-1" /> Quản Lý Lô Hàng &
-                Hạn Sử Dụng
-              </h4>
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h4 className="fw-bold text-primary m-0">
+                  <AlertTriangle size={20} className="me-1" /> Quản Lý Sản Phẩm
+                  & Lô Hàng
+                </h4>
+              </div>
 
               <div className="d-flex flex-wrap gap-2 mb-4">
                 <button
@@ -666,7 +832,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   }`}
                   onClick={() => setBatchFilter("all")}
                 >
-                  <Layers size={16} /> Tất cả
+                  <Layers size={16} /> Tất cả Sản Phẩm
                 </button>
                 <button
                   className={`btn rounded-pill px-3 d-flex align-items-center gap-2 ${
@@ -676,7 +842,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   }`}
                   onClick={() => setBatchFilter("safe")}
                 >
-                  <CheckCircle size={16} /> Còn hạn
+                  <CheckCircle size={16} /> Lô Còn Hạn
                 </button>
                 <button
                   className={`btn rounded-pill px-3 d-flex align-items-center gap-2 ${
@@ -686,7 +852,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   }`}
                   onClick={() => setBatchFilter("warning")}
                 >
-                  <AlertTriangle size={16} /> Sắp hết hạn
+                  <AlertTriangle size={16} /> Lô Sắp Hết Hạn
                 </button>
                 <button
                   className={`btn rounded-pill px-3 d-flex align-items-center gap-2 ${
@@ -696,76 +862,230 @@ const AdminDashboard = ({ user, onLogout }) => {
                   }`}
                   onClick={() => setBatchFilter("expired")}
                 >
-                  <XCircle size={16} /> Đã hết hạn
+                  <XCircle size={16} /> Lô Hết Hạn
                 </button>
               </div>
 
               {batchFilter === "all" && (
-                <div className="alert alert-warning border-0 bg-warning bg-opacity-10 text-warning-emphasis d-flex align-items-center mb-3">
-                  <AlertTriangle className="me-2" />
+                <div className="alert alert-info border-0 bg-info bg-opacity-10 text-info-emphasis d-flex align-items-center mb-3">
+                  <Package className="me-2" />
                   <div>
-                    <strong>Lưu ý:</strong> Các sản phẩm có hạn sử dụng dưới 30
-                    ngày sẽ được cảnh báo màu vàng.
+                    <strong>Cấu trúc chuẩn:</strong> 1 Sản Phẩm gồm nhiều Lô - 1
+                    Lô gồm nhiều Hộp (Mã UID).
                   </div>
                 </div>
               )}
 
-              <div className="table-responsive" style={{ maxHeight: "600px" }}>
-                <table className="table fs-6 align-middle">
-                  <thead className="table-light sticky-top">
+              <div
+                className="table-responsive"
+                style={{ maxHeight: "600px", borderRadius: "10px" }}
+              >
+                <table className="table fs-6 align-middle mb-0">
+                  <thead className="table-light sticky-top shadow-sm">
                     <tr>
-                      <th className="rounded-start">Mã Lô</th>
-                      <th>Sản Phẩm</th>
-                      <th>Hạn Sử Dụng</th>
-                      <th>Còn Lại</th>
-                      <th className="rounded-end text-center">Trạng Thái</th>
+                      <th className="rounded-start ps-3 py-3">
+                        Sản Phẩm Cốt Lõi
+                      </th>
+                      <th className="py-3">Phân Loại</th>
+                      <th className="text-center py-3">Số Lô Hiện Có</th>
+                      <th className="text-center py-3">Tổng Hộp Tồn Kho</th>
+                      <th className="rounded-end text-center py-3">
+                        Quản Lý Lô
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {batchList.length > 0 ? (
-                      batchList.map((p) => {
-                        const status = getExpiryStatus(p);
-                        const days = getDaysRemaining(p);
-                        return (
-                          <tr
-                            key={p.uid}
-                            className={
-                              days <= 30 && days >= 0
-                                ? "bg-warning bg-opacity-10"
-                                : days < 0
-                                  ? "bg-danger bg-opacity-10"
-                                  : ""
-                            }
-                          >
-                            <td className="fw-bold font-monospace">
-                              {p.batch_number}
+                    {groupedProductList.length > 0 ? (
+                      groupedProductList.map((prod) => (
+                        <React.Fragment key={prod.name}>
+                          {/* MỨC 1: SẢN PHẨM GỐC */}
+                          <tr className="bg-white border-bottom hover-bg-light transition-all">
+                            <td className="fw-bold text-primary fs-6 ps-3 py-3">
+                              {prod.name}
                             </td>
-                            <td>
-                              <div className="fw-bold text-dark">{p.name}</div>
-                              <small className="text-muted">{p.uid}</small>
-                            </td>
-                            <td>{p.expiry_date}</td>
-                            <td
-                              className={`fw-bold ${
-                                days < 0 ? "text-danger" : ""
-                              }`}
-                            >
-                              {days < 0 ? `Quá ${Math.abs(days)}` : days} ngày
-                            </td>
-                            <td className="text-center">
-                              <span
-                                className={`badge bg-${status.bg} text-white px-3 py-2 rounded-pill`}
-                              >
-                                {status.label}
+                            <td className="py-3">
+                              <span className="badge bg-secondary bg-opacity-10 text-secondary border">
+                                {prod.category}
                               </span>
                             </td>
+                            <td className="text-center py-3">
+                              <span className="badge bg-info text-dark fw-bold px-3 py-2 rounded-pill">
+                                {Object.keys(prod.batches).length} Lô
+                              </span>
+                            </td>
+                            <td className="text-center py-3">
+                              <span className="badge bg-success bg-opacity-10 text-success fw-bold border border-success px-3 py-2 rounded-pill">
+                                {prod.total_items} hộp
+                              </span>
+                            </td>
+                            <td className="text-center py-3">
+                              <button
+                                className={`btn btn-sm rounded-pill px-3 fw-bold transition-all ${
+                                  expandedProduct === prod.name
+                                    ? "btn-primary shadow"
+                                    : "btn-outline-primary"
+                                }`}
+                                onClick={() =>
+                                  setExpandedProduct(
+                                    expandedProduct === prod.name
+                                      ? null
+                                      : prod.name,
+                                  )
+                                }
+                              >
+                                {expandedProduct === prod.name
+                                  ? "Thu Gọn"
+                                  : "Xem Các Lô"}
+                              </button>
+                            </td>
                           </tr>
-                        );
-                      })
+
+                          {/* MỨC 2: DANH SÁCH LÔ CỦA SẢN PHẨM ĐÓ */}
+                          {expandedProduct === prod.name && (
+                            <tr>
+                              <td colSpan="5" className="p-0 border-0 bg-light">
+                                <div className="p-3 ps-4 border-start border-primary border-4 m-2 bg-white rounded shadow-sm">
+                                  <h6 className="fw-bold text-muted mb-3 d-flex align-items-center">
+                                    <Layers
+                                      size={18}
+                                      className="me-2 text-primary"
+                                    />
+                                    Danh sách Lô thuộc "{prod.name}"
+                                  </h6>
+                                  <table className="table table-sm table-hover mb-0 border rounded overflow-hidden">
+                                    <thead className="table-secondary text-muted">
+                                      <tr>
+                                        <th className="ps-3 py-2">
+                                          Mã Lô Hàng
+                                        </th>
+                                        <th className="text-center py-2">
+                                          Số Lượng Hộp
+                                        </th>
+                                        <th className="py-2">Hạn Sử Dụng</th>
+                                        <th className="py-2">Tình Trạng</th>
+                                        <th className="text-center py-2">
+                                          Truy Xuất Hộp
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {Object.values(prod.batches)
+                                        .sort(
+                                          (a, b) =>
+                                            a.expiry_unix - b.expiry_unix,
+                                        )
+                                        .map((batch) => {
+                                          const status = getExpiryStatus(batch);
+                                          const days = getDaysRemaining(batch);
+                                          const batchKey = `${prod.name}-${batch.batch_number}`;
+                                          const isBatchExpanded =
+                                            expandedBatchDetail === batchKey;
+
+                                          return (
+                                            <React.Fragment
+                                              key={batch.batch_number}
+                                            >
+                                              <tr
+                                                className={
+                                                  days <= 30 && days >= 0
+                                                    ? "bg-warning bg-opacity-10"
+                                                    : days < 0
+                                                      ? "bg-danger bg-opacity-10"
+                                                      : ""
+                                                }
+                                              >
+                                                <td className="fw-bold font-monospace text-dark ps-3 align-middle">
+                                                  {batch.batch_number}
+                                                </td>
+                                                <td className="text-center align-middle">
+                                                  <span className="badge bg-dark rounded-pill px-3">
+                                                    {batch.items.length} hộp
+                                                  </span>
+                                                </td>
+                                                <td className="align-middle">
+                                                  {batch.expiry_date}{" "}
+                                                  <small
+                                                    className={`fw-bold ms-1 ${
+                                                      days < 0
+                                                        ? "text-danger"
+                                                        : "text-success"
+                                                    }`}
+                                                  >
+                                                    (
+                                                    {days < 0
+                                                      ? `Quá hạn ${Math.abs(days)} ngày`
+                                                      : `Còn ${days} ngày`}
+                                                    )
+                                                  </small>
+                                                </td>
+                                                <td className="align-middle">
+                                                  <span
+                                                    className={`badge bg-${status.bg} text-white px-2 py-1 rounded-pill`}
+                                                  >
+                                                    {status.label}
+                                                  </span>
+                                                </td>
+                                                <td className="text-center align-middle">
+                                                  <button
+                                                    className="btn btn-sm btn-link text-decoration-none fw-bold"
+                                                    onClick={() =>
+                                                      setExpandedBatchDetail(
+                                                        isBatchExpanded
+                                                          ? null
+                                                          : batchKey,
+                                                      )
+                                                    }
+                                                  >
+                                                    {isBatchExpanded
+                                                      ? "Ẩn Mã ID"
+                                                      : "Mở Mã ID"}
+                                                  </button>
+                                                </td>
+                                              </tr>
+
+                                              {/* MỨC 3: CHI TIẾT TỪNG HỘP TRONG LÔ */}
+                                              {isBatchExpanded && (
+                                                <tr>
+                                                  <td
+                                                    colSpan="5"
+                                                    className="p-3 bg-light border-bottom"
+                                                  >
+                                                    <div className="text-muted small fw-bold mb-2">
+                                                      Danh sách{" "}
+                                                      {batch.items.length} mã ID
+                                                      hộp sữa trong lô này:
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                      {batch.items.map(
+                                                        (item) => (
+                                                          <span
+                                                            key={item.uid}
+                                                            className="badge bg-white text-primary border border-primary border-opacity-25 font-monospace p-2 shadow-sm"
+                                                            title="Mã quét QR"
+                                                          >
+                                                            {item.uid}
+                                                          </span>
+                                                        ),
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              )}
+                                            </React.Fragment>
+                                          );
+                                        })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="text-center text-muted py-4">
-                          Không có lô hàng nào trong mục này.
+                        <td colSpan="5" className="text-center text-muted py-5">
+                          Không có sản phẩm hoặc lô hàng nào trong mục này.
                         </td>
                       </tr>
                     )}
@@ -845,6 +1165,106 @@ const AdminDashboard = ({ user, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL SỬA SẢN PHẨM --- */}
+      {editingProduct && (
+        <div
+          className="modal d-block"
+          style={{
+            backgroundColor: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(5px)",
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="glass-panel modal-content border-0 rounded-4">
+              <div className="modal-header border-0 pb-0">
+                <h5 className="modal-title fw-bold text-primary">
+                  Sửa Thông Tin Sản Phẩm
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setEditingProduct(null)}
+                ></button>
+              </div>
+              <div className="modal-body pt-3">
+                <form onSubmit={handleUpdate}>
+                  <div className="mb-2">
+                    <label className="small fw-bold text-muted">
+                      Tên Sản Phẩm
+                    </label>
+                    <input
+                      name="name"
+                      defaultValue={editingProduct.name}
+                      className="form-control rounded-3"
+                      required
+                    />
+                  </div>
+                  <div className="row g-2 mb-2">
+                    <div className="col-6">
+                      <label className="small fw-bold text-muted">Số Lô</label>
+                      <input
+                        name="batch_number"
+                        defaultValue={editingProduct.batch_number}
+                        className="form-control rounded-3"
+                        required
+                      />
+                    </div>
+                    <div className="col-6">
+                      <label className="small fw-bold text-muted">
+                        Hạn Dùng (Chọn lại nếu đổi)
+                      </label>
+                      <input
+                        name="p_date"
+                        type="date"
+                        className="form-control rounded-3"
+                      />
+                      <small className="text-muted d-block mt-1">
+                        Cũ: {editingProduct.expiry_date}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="small fw-bold text-muted">Danh mục</label>
+                    <select
+                      name="category"
+                      defaultValue={editingProduct.category}
+                      className="form-select rounded-3"
+                    >
+                      <option value="Sữa Tươi">Sữa Tươi</option>
+                      <option value="Sữa Bột Cho Bé">Sữa Bột Cho Bé</option>
+                      <option value="Sữa Người Lớn">Sữa Người Lớn</option>
+                      <option value="Sữa Hạt">Sữa Hạt</option>
+                      <option value="Sữa Chua">Sữa Chua</option>
+                    </select>
+                  </div>
+                  <div className="mb-2">
+                    <label className="small fw-bold text-muted">
+                      Hình Ảnh (URL)
+                    </label>
+                    <input
+                      name="product_image"
+                      defaultValue={editingProduct.product_image}
+                      className="form-control rounded-3"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="small fw-bold text-muted">Mô Tả</label>
+                    <textarea
+                      name="description"
+                      defaultValue={editingProduct.description}
+                      className="form-control rounded-3"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                  <button className="btn btn-primary w-100 rounded-pill fw-bold">
+                    CẬP NHẬT LÊN DATABASE
+                  </button>
+                </form>
               </div>
             </div>
           </div>
