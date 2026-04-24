@@ -63,6 +63,10 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [expandedProduct, setExpandedProduct] = useState(null);
   const [expandedBatchDetail, setExpandedBatchDetail] = useState(null);
 
+  // [MỚI] STATE ĐỂ LƯU ẢNH BASE64 TRƯỚC KHI GỬI ĐI
+  const [productImageBase64, setProductImageBase64] = useState("");
+  const [editImageBase64, setEditImageBase64] = useState("");
+
   const loadData = async () => {
     const data = await api.getProducts();
     setProducts(data);
@@ -74,17 +78,39 @@ const AdminDashboard = ({ user, onLogout }) => {
     loadData();
   }, []);
 
+  // [MỚI] HÀM XỬ LÝ CHUYỂN FILE ẢNH THÀNH BASE64
+  const handleImageUpload = (e, isEdit = false) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = () => {
+        if (isEdit) {
+          setEditImageBase64(reader.result);
+        } else {
+          setProductImageBase64(reader.result);
+        }
+      };
+    }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData.entries());
     data.expiry_date_unix = Math.floor(new Date(data.p_date).getTime() / 1000);
 
+    // [MỚI] NẾU CÓ ẢNH BASE64 THÌ NHÉT VÀO DATA GỬI ĐI
+    if (productImageBase64) {
+      data.product_image = productImageBase64;
+    }
+
     const res = await api.createProduct(data);
     if (res.status === "success") {
       alert("✅ Thành công!");
       loadData();
       e.target.reset();
+      setProductImageBase64(""); // Xóa ảnh sau khi thành công
     } else alert("❌ Lỗi: " + res.message);
   };
 
@@ -100,10 +126,16 @@ const AdminDashboard = ({ user, onLogout }) => {
       data.expiry_date = new Date(data.p_date).toLocaleDateString("vi-VN");
     }
 
+    // [MỚI] NẾU CÓ ĐỔI ẢNH MỚI THÌ NHÉT VÀO
+    if (editImageBase64) {
+      data.product_image = editImageBase64;
+    }
+
     const res = await api.updateProduct(editingProduct.uid, data);
     if (res.status === "success") {
       alert("✅ Cập nhật thành công!");
       setEditingProduct(null);
+      setEditImageBase64(""); // Xóa ảnh sau khi thành công
       loadData();
     } else {
       alert("❌ Lỗi: " + res.message);
@@ -284,24 +316,21 @@ const AdminDashboard = ({ user, onLogout }) => {
     return result;
   };
 
-  // --- CẬP NHẬT LOGIC: NHÓM THEO "SẢN PHẨM" TRƯỚC, RỒI TỚI "LÔ" ---
   const getGroupedProducts = () => {
     const rawList = getFilteredBatches();
     const grouped = {};
 
     rawList.forEach((p) => {
-      // 1. Tạo nhóm Sản phẩm (Product) nếu chưa có
       if (!grouped[p.name]) {
         grouped[p.name] = {
           name: p.name,
           category: p.category,
           total_items: 0,
-          batches: {}, // Chứa các lô của sản phẩm này
+          batches: {},
         };
       }
       grouped[p.name].total_items += 1;
 
-      // 2. Phân loại sản phẩm vào Lô tương ứng
       if (!grouped[p.name].batches[p.batch_number]) {
         grouped[p.name].batches[p.batch_number] = {
           batch_number: p.batch_number,
@@ -313,7 +342,6 @@ const AdminDashboard = ({ user, onLogout }) => {
       grouped[p.name].batches[p.batch_number].items.push(p);
     });
 
-    // Trả về mảng các sản phẩm, xếp theo tên Alpha B
     return Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
   };
 
@@ -596,15 +624,37 @@ const AdminDashboard = ({ user, onLogout }) => {
                         />
                       </div>
                     </div>
+
+                    {/* [CẬP NHẬT] INPUT CHỌN FILE ẢNH TỪ MÁY */}
                     <div className="mb-2">
                       <label className="small fw-bold text-muted">
-                        Hình Ảnh (URL)
+                        Hình Ảnh (Chọn từ máy)
                       </label>
                       <input
-                        name="product_image"
+                        type="file"
+                        accept="image/*"
                         className="form-control rounded-3"
+                        onChange={(e) => handleImageUpload(e, false)}
                       />
+                      {/* Hiển thị ảnh xem trước */}
+                      {productImageBase64 && (
+                        <div className="mt-2 text-center">
+                          <img
+                            src={productImageBase64}
+                            alt="Preview"
+                            style={{
+                              width: "100px",
+                              height: "100px",
+                              objectFit: "cover",
+                              borderRadius: "8px",
+                              border: "1px solid #ddd",
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
+                    {/* Hết phần cập nhật file ảnh */}
+
                     <div className="mb-3">
                       <label className="small fw-bold text-muted">Mô Tả</label>
                       <textarea
@@ -725,7 +775,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 <div className="d-flex justify-content-center align-items-center gap-2">
                                   <button
                                     className="btn btn-sm border-0 text-primary p-0"
-                                    onClick={() => setEditingProduct(p)}
+                                    onClick={() => {
+                                      setEditingProduct(p);
+                                      setEditImageBase64(""); // Xóa ảnh cũ trên Modal khi bấm sửa mới
+                                    }}
                                     title="Sửa"
                                   >
                                     <Edit size={16} />
@@ -865,16 +918,6 @@ const AdminDashboard = ({ user, onLogout }) => {
                   <XCircle size={16} /> Lô Hết Hạn
                 </button>
               </div>
-
-              {batchFilter === "all" && (
-                <div className="alert alert-info border-0 bg-info bg-opacity-10 text-info-emphasis d-flex align-items-center mb-3">
-                  <Package className="me-2" />
-                  <div>
-                    <strong>Cấu trúc chuẩn:</strong> 1 Sản Phẩm gồm nhiều Lô - 1
-                    Lô gồm nhiều Hộp (Mã UID).
-                  </div>
-                </div>
-              )}
 
               <div
                 className="table-responsive"
@@ -1242,16 +1285,37 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <option value="Sữa Chua">Sữa Chua</option>
                     </select>
                   </div>
+
+                  {/* [CẬP NHẬT] INPUT CHỌN ẢNH Ở MODAL SỬA */}
                   <div className="mb-2">
                     <label className="small fw-bold text-muted">
-                      Hình Ảnh (URL)
+                      Hình Ảnh (Chọn từ máy để thay đổi)
                     </label>
                     <input
-                      name="product_image"
-                      defaultValue={editingProduct.product_image}
+                      type="file"
+                      accept="image/*"
                       className="form-control rounded-3"
+                      onChange={(e) => handleImageUpload(e, true)}
                     />
+                    {/* Hiển thị ảnh cũ HOẶC ảnh mới chọn */}
+                    {(editImageBase64 || editingProduct.product_image) && (
+                      <div className="mt-2 text-center">
+                        <img
+                          src={editImageBase64 || editingProduct.product_image}
+                          alt="Preview"
+                          style={{
+                            width: "100px",
+                            height: "100px",
+                            objectFit: "cover",
+                            borderRadius: "8px",
+                            border: "1px solid #ddd",
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
+                  {/* Hết cập nhật ảnh sửa */}
+
                   <div className="mb-3">
                     <label className="small fw-bold text-muted">Mô Tả</label>
                     <textarea

@@ -2,9 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
-const path = require("path"); // [MỚI BỔ SUNG] Thư viện đường dẫn
+const path = require("path");
 const connectDB = require("./database");
-const { Product, History, User } = require("./models");
+// [CẬP NHẬT] Thêm Batch và Item vào để dùng cấu trúc 3 bảng
+const { Product, Batch, Item, History, User } = require("./models");
 const {
   initBlockchain,
   createOnChain,
@@ -17,9 +18,11 @@ const PORT = 8000;
 
 // --- MIDDLEWARE ---
 app.use(cors());
-app.use(express.json());
+// Cấu hình limit 10mb để cho phép nhận ảnh Base64
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// [MỚI BỔ SUNG] Phục vụ file giao diện Frontend (Thư mục dist)
+// Phục vụ file giao diện Frontend (Thư mục dist)
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
 // --- KHỞI ĐỘNG DỊCH VỤ ---
@@ -30,8 +33,36 @@ initBlockchain();
 
 app.get("/products", async (req, res) => {
   try {
-    const products = await Product.find().sort({ _id: -1 });
-    res.json(products);
+    // [CẬP NHẬT] Đọc từ bảng Item, sau đó móc nối (populate) ra Batch và Product
+    const items = await Item.find()
+      .populate({
+        path: "batchId",
+        populate: { path: "productId" },
+      })
+      .sort({ _id: -1 });
+
+    // Format lại dữ liệu cho giống hệt cấu trúc cũ để Frontend không bị lỗi
+    const formattedProducts = items
+      .map((item) => {
+        // Đảm bảo không bị crash nếu dữ liệu bị thiếu
+        if (!item.batchId || !item.batchId.productId) return null;
+        return {
+          uid: item.uid,
+          name: item.batchId.productId.name,
+          category: item.batchId.productId.category,
+          batch_number: item.batchId.batch_number,
+          expiry_date: item.batchId.expiry_date,
+          expiry_unix: item.batchId.expiry_unix,
+          tx_hash: item.tx_hash,
+          qr_image: item.qr_image,
+          product_image: item.batchId.productId.product_image,
+          description: item.batchId.productId.description,
+          scan_count: item.scan_count,
+        };
+      })
+      .filter((p) => p !== null);
+
+    res.json(formattedProducts);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -41,47 +72,71 @@ app.post("/create_product", async (req, res) => {
   try {
     const p = req.body;
 
-    if (await Product.findOne({ uid: p.uid })) {
+    if (await Item.findOne({ uid: p.uid })) {
       return res.json({ status: "error", message: "Mã ID này đã tồn tại!" });
     }
 
+    // [CẬP NHẬT] Tách làm 3 bước chuẩn hóa CSDL
+    // Bước 1: Tìm hoặc tạo Product (Sản phẩm gốc)
+    let product = await Product.findOne({ name: p.name });
+    if (!product) {
+      product = new Product({
+        sku: `SKU-${Date.now()}`, // Tạo mã SKU tạm
+        name: p.name,
+        category: p.category || "Sữa Tươi",
+        product_image:
+          p.product_image ||
+          "https://vinamilk.com.vn/static/uploads/2021/05/Sua-tuoi-tiet-trung-Vinamilk-100-tach-beo-khong-duong-1.jpg",
+        description:
+          p.description ||
+          "Sản phẩm sữa tươi tiệt trùng, giàu dinh dưỡng, tốt cho sức khỏe.",
+      });
+      await product.save();
+    }
+
+    // Bước 2: Tìm hoặc tạo Batch (Lô hàng)
+    let batch = await Batch.findOne({
+      productId: product._id,
+      batch_number: p.batch_number,
+    });
+    if (!batch) {
+      batch = new Batch({
+        productId: product._id,
+        batch_number: p.batch_number,
+        expiry_date: new Date(p.expiry_date_unix * 1000).toLocaleDateString(
+          "vi-VN",
+        ),
+        expiry_unix: p.expiry_date_unix,
+        price: p.price || 0,
+      });
+      await batch.save();
+    }
+
+    // Bước 3: Đẩy lên Blockchain và tạo Item (Từng hộp sữa)
     const txHash = await createOnChain(
       p.uid,
       p.name,
       p.batch_number,
       p.expiry_date_unix,
     );
-    // [CẬP NHẬT] Đổi host quét QR linh động theo tên miền thực tế
+
     const host = req.get("host");
     const protocol =
       req.protocol === "https" || req.headers["x-forwarded-proto"] === "https"
         ? "https"
         : "http";
     const clientURL = p.qr_url || `${protocol}://${host}/?uid=${p.uid}`;
-
     const qrBase64 = await QRCode.toDataURL(clientURL);
 
-    const newProduct = new Product({
+    const newItem = new Item({
+      batchId: batch._id,
       uid: p.uid,
-      name: p.name,
-      category: p.category || "Sữa Tươi",
-      batch_number: p.batch_number,
-      expiry_date: new Date(p.expiry_date_unix * 1000).toLocaleDateString(
-        "vi-VN",
-      ),
-      expiry_unix: p.expiry_date_unix,
-      created_at: new Date().toLocaleDateString("vi-VN"),
       tx_hash: txHash,
       qr_image: qrBase64,
-      product_image:
-        p.product_image ||
-        "https://vinamilk.com.vn/static/uploads/2021/05/Sua-tuoi-tiet-trung-Vinamilk-100-tach-beo-khong-duong-1.jpg",
-      description:
-        p.description ||
-        "Sản phẩm sữa tươi tiệt trùng, giàu dinh dưỡng, tốt cho sức khỏe.",
+      scan_count: 0,
     });
+    await newItem.save();
 
-    await newProduct.save();
     res.json({ status: "success", tx_hash: txHash });
   } catch (e) {
     console.error("Create Error:", e);
@@ -102,11 +157,43 @@ app.post("/create_products_bulk", async (req, res) => {
 
     for (const p of products) {
       try {
-        if (await Product.findOne({ uid: p.uid })) {
+        if (await Item.findOne({ uid: p.uid })) {
           results.push({ uid: p.uid, status: "skip", message: "Đã tồn tại" });
           continue;
         }
 
+        // Bước 1: Product
+        let product = await Product.findOne({ name: p.name });
+        if (!product) {
+          product = new Product({
+            sku: `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            name: p.name,
+            category: p.category || "Sữa Tươi",
+            product_image: p.product_image,
+            description: p.description,
+          });
+          await product.save();
+        }
+
+        // Bước 2: Batch
+        let batch = await Batch.findOne({
+          productId: product._id,
+          batch_number: p.batch_number,
+        });
+        if (!batch) {
+          batch = new Batch({
+            productId: product._id,
+            batch_number: p.batch_number,
+            expiry_date:
+              p.expiry_date ||
+              new Date(p.expiry_date_unix * 1000).toLocaleDateString("vi-VN"),
+            expiry_unix: p.expiry_date_unix,
+            price: 0,
+          });
+          await batch.save();
+        }
+
+        // Bước 3: Blockchain & Item
         const txHash = await createOnChain(
           p.uid,
           p.name,
@@ -116,23 +203,14 @@ app.post("/create_products_bulk", async (req, res) => {
         const clientURL = `${protocol}://${host}/?uid=${p.uid}`;
         const qrBase64 = await QRCode.toDataURL(clientURL);
 
-        const newProduct = new Product({
+        const newItem = new Item({
+          batchId: batch._id,
           uid: p.uid,
-          name: p.name,
-          category: p.category || "Sữa Tươi",
-          batch_number: p.batch_number,
-          expiry_date:
-            p.expiry_date ||
-            new Date(p.expiry_date_unix * 1000).toLocaleDateString("vi-VN"),
-          expiry_unix: p.expiry_date_unix,
-          created_at: new Date().toLocaleDateString("vi-VN"),
           tx_hash: txHash,
           qr_image: qrBase64,
-          product_image: p.product_image,
-          description: p.description,
         });
+        await newItem.save();
 
-        await newProduct.save();
         results.push({ uid: p.uid, status: "success" });
       } catch (err) {
         console.error(`❌ Lỗi ${p.uid}:`, err.message);
@@ -149,21 +227,53 @@ app.put("/update_product/:uid", async (req, res) => {
     const { uid } = req.params;
     const updateData = req.body;
 
-    const updatedProduct = await Product.findOneAndUpdate(
-      { uid: uid },
-      { $set: updateData },
-      { new: true },
-    );
+    // Tìm Item trước
+    const item = await Item.findOne({ uid: uid }).populate({
+      path: "batchId",
+      populate: { path: "productId" },
+    });
 
-    if (!updatedProduct) {
+    if (!item) {
       return res.json({ status: "error", message: "Không tìm thấy sản phẩm!" });
     }
 
-    res.json({
-      status: "success",
-      message: "Cập nhật thành công!",
-      product: updatedProduct,
-    });
+    // Cập nhật Product gốc nếu có thông tin mới
+    if (
+      updateData.name ||
+      updateData.category ||
+      updateData.product_image ||
+      updateData.description
+    ) {
+      const product = item.batchId.productId;
+      if (updateData.name) product.name = updateData.name;
+      if (updateData.category) product.category = updateData.category;
+      if (updateData.product_image)
+        product.product_image = updateData.product_image;
+      if (updateData.description) product.description = updateData.description;
+      await product.save();
+    }
+
+    // Cập nhật Batch nếu có thông tin mới
+    if (
+      updateData.batch_number ||
+      updateData.expiry_date ||
+      updateData.p_date
+    ) {
+      const batch = item.batchId;
+      if (updateData.batch_number) batch.batch_number = updateData.batch_number;
+      if (updateData.p_date) {
+        // p_date lấy từ form Frontend
+        batch.expiry_unix = Math.floor(
+          new Date(updateData.p_date).getTime() / 1000,
+        );
+        batch.expiry_date = new Date(updateData.p_date).toLocaleDateString(
+          "vi-VN",
+        );
+      }
+      await batch.save();
+    }
+
+    res.json({ status: "success", message: "Cập nhật thành công!" });
   } catch (e) {
     console.error("Update Error:", e);
     res.status(500).json({ status: "error", message: e.message });
@@ -173,12 +283,10 @@ app.put("/update_product/:uid", async (req, res) => {
 app.delete("/delete_product/:uid", async (req, res) => {
   try {
     const { uid } = req.params;
-
-    const deletedProduct = await Product.findOneAndDelete({ uid: uid });
-    if (!deletedProduct) {
+    const deletedItem = await Item.findOneAndDelete({ uid: uid });
+    if (!deletedItem) {
       return res.json({ status: "error", message: "Không tìm thấy sản phẩm!" });
     }
-
     res.json({ status: "success", message: "Xóa sản phẩm thành công!" });
   } catch (e) {
     console.error("Delete Error:", e);
@@ -192,9 +300,7 @@ app.post("/delete_products_bulk", async (req, res) => {
     if (!uids || !Array.isArray(uids)) {
       return res.json({ status: "error", message: "Danh sách không hợp lệ!" });
     }
-
-    await Product.deleteMany({ uid: { $in: uids } });
-
+    await Item.deleteMany({ uid: { $in: uids } });
     res.json({ status: "success", message: "Xóa nhiều sản phẩm thành công!" });
   } catch (e) {
     console.error("Delete Bulk Error:", e);
@@ -205,26 +311,29 @@ app.post("/delete_products_bulk", async (req, res) => {
 app.get("/verify/:uid", async (req, res) => {
   try {
     const query = req.params.uid;
-    const p = await Product.findOne({
-      $or: [{ uid: query }, { name: { $regex: query, $options: "i" } }],
+    // Tìm trong Item thay vì Product
+    const item = await Item.findOne({ uid: query }).populate({
+      path: "batchId",
+      populate: { path: "productId" },
     });
 
-    if (p) {
+    if (item) {
       return res.json({
         is_valid: true,
-        uid: p.uid,
-        name: p.name,
-        category: p.category,
-        batch_number: p.batch_number,
-        expiry_date: p.expiry_date,
-        product_image: p.product_image,
-        description: p.description,
-        tx_hash: p.tx_hash,
-        scan_count: p.scan_count,
+        uid: item.uid,
+        name: item.batchId.productId.name,
+        category: item.batchId.productId.category,
+        batch_number: item.batchId.batch_number,
+        expiry_date: item.batchId.expiry_date,
+        product_image: item.batchId.productId.product_image,
+        description: item.batchId.productId.description,
+        tx_hash: item.tx_hash,
+        scan_count: item.scan_count,
         source: "Database",
       });
     }
 
+    // Nếu không có trong DB thì quét trên Blockchain
     const bcData = await verifyOnChain(query);
     if (bcData) {
       return res.json({
@@ -252,7 +361,7 @@ app.post("/record_scan", async (req, res) => {
     const { uid, location, status, action_type, username } = req.body;
 
     if (status !== "invalid") {
-      await Product.updateOne({ uid: uid }, { $inc: { scan_count: 1 } });
+      await Item.updateOne({ uid: uid }, { $inc: { scan_count: 1 } });
     }
     const now = new Date();
 
@@ -291,9 +400,62 @@ app.get("/user_history/:username", async (req, res) => {
 });
 
 app.post("/ask_ai", async (req, res) => {
-  const { product_name, question } = req.body;
-  const ans = await getAnswer(product_name, question);
-  res.json({ answer: ans });
+  try {
+    const { product_id, question } = req.body;
+
+    let dbContext = "";
+
+    if (product_id) {
+      // Đọc toàn bộ dữ liệu 3 bảng thông qua populate
+      const itemFromDB = await Item.findOne({ uid: product_id }).populate({
+        path: "batchId",
+        populate: { path: "productId" },
+      });
+
+      if (itemFromDB) {
+        const cleanData = {
+          "Mã hộp sữa (UID)": itemFromDB.uid,
+          "Tên sản phẩm": itemFromDB.batchId.productId.name,
+          "Thuộc lô số": itemFromDB.batchId.batch_number,
+          "Hạn sử dụng": itemFromDB.batchId.expiry_date,
+          "Số lần quét QR (Scan count)": itemFromDB.scan_count || 0,
+          "Tình trạng Blockchain": itemFromDB.tx_hash
+            ? "Đã lưu tx_hash"
+            : "Chưa lưu",
+        };
+        dbContext = `Khách đang tra cứu chi tiết sản phẩm này: ${JSON.stringify(cleanData, null, 2)}`;
+      } else {
+        dbContext =
+          "Khách đang tra cứu một mã sản phẩm không tồn tại trong hệ thống MongoDB.";
+      }
+    } else {
+      // Đọc danh sách mới nhất
+      const allItems = await Item.find()
+        .populate({
+          path: "batchId",
+          populate: { path: "productId" },
+        })
+        .sort({ _id: -1 })
+        .limit(10);
+
+      const briefList = allItems.map((item) => ({
+        name: item.batchId.productId.name,
+        batch: item.batchId.batch_number,
+        uid: item.uid,
+      }));
+
+      dbContext = `Khách đang hỏi chung chung. Đây là danh sách 10 mã hộp sữa mới nhất: ${JSON.stringify(briefList)}`;
+    }
+
+    const ans = await getAnswer(dbContext, question);
+    res.json({ answer: ans });
+  } catch (error) {
+    console.error("Lỗi khi đọc MongoDB cho AI:", error);
+    res.status(500).json({
+      answer:
+        "Xin lỗi, hệ thống AI đang gặp sự cố khi kết nối với Cơ sở dữ liệu. Vui lòng thử lại sau!",
+    });
+  }
 });
 
 app.post("/register", async (req, res) => {
@@ -390,14 +552,19 @@ app.get("/users", async (req, res) => {
 
 app.get("/clear_database", async (req, res) => {
   try {
-    await Product.deleteMany({});
-    await History.deleteMany({});
-    res.send("<h1>✅ Đã xóa sạch Database!</h1>");
+    // Dùng lệnh drop() để đập bỏ hoàn toàn cái bảng và xóa luôn "luật Index cũ"
+    await Product.collection.drop().catch(() => {});
+    await Batch.collection.drop().catch(() => {});
+    await Item.collection.drop().catch(() => {});
+    await History.collection.drop().catch(() => {});
+
+    res.send(
+      "<h1>✅ Đã đập bỏ hoàn toàn Database và các luật lệ cũ! Hệ thống đã sạch sẽ 100%!</h1>",
+    );
   } catch (e) {
     res.status(500).send("Lỗi: " + e.message);
   }
 });
-
 // [MỚI BỔ SUNG] Đặt ở CÙNG, bắt mọi request (không phải API) để trả về React App
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
